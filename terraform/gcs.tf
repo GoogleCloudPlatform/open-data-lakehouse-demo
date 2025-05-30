@@ -29,3 +29,7 @@ resource "google_storage_bucket" "data_lakehouse_bucket" {
     }
   }
 }
+
+output "gcs_bucket" {
+  value = google_storage_bucket.data_lakehouse_bucket.name
+}
