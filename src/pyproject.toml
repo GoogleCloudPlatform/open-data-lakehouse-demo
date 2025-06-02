@@ -28,3 +28,7 @@ dependencies = [
     "vegafusion>=2.0.2",
     "vl-convert-python>=1.8.0",
 ]
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"

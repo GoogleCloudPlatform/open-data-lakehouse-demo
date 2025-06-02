@@ -8,54 +8,57 @@ app = marimo.App()
 def _(mo):
     mo.md(
         r"""
-        # Ridership Open Lakehouse Demo
+    # Ridership Open Lakehouse Demo
 
-        This notebook will demonstrate a strategy to implement an open lakehouse on GCP, using Apache Iceberg, 
-        as an open source standard for managing data, while still leveraging GCP native capabilities. This demo will use 
-        BigQuery Manged Iceberg Tables, Managed Apache Kafka and Apache Kafka Connect to ingest streaming data, Vertex AI for Generative AI queries on top of the data and Dataplex to govern tables.
+    This notebook will demonstrate a strategy to implement an open lakehouse on GCP, using Apache Iceberg, 
+    as an open source standard for managing data, while still leveraging GCP native capabilities. This demo will use 
+    BigQuery Manged Iceberg Tables, Managed Apache Kafka and Apache Kafka Connect to ingest streaming data, Vertex AI for Generative AI queries on top of the data and Dataplex to govern tables.
 
-        This notebook will generate fake data and anonimized real-world data.
+    This notebook will generate fake data and anonimized real-world data.
 
-        the real-world data used in this notebook is from [MTA daily ridership data](https://data.ny.gov/Transportation/MTA-Daily-Ridership-Data-2020-2025/vxuj-8kew/data_preview).
+    the real-world data used in this notebook is from [MTA daily ridership data](https://data.ny.gov/Transportation/MTA-Daily-Ridership-Data-2020-2025/vxuj-8kew/data_preview).
 
 
-        Rest of the data is being randomly generated inside the notebook.
-        """
+    Rest of the data is being randomly generated inside the notebook.
+    """
     )
     return
 
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(
-        r"""
-        ## Setup the environment
-        """
-    )
+    mo.md(r"""## Setup the environment""")
     return
 
 
-app._unparsable_cell(
-    r"""
-    !pip install faker pandas sodapy --upgrade --quiet
-    """,
-    name="_"
-)
-
-
-@app.cell(
+@app.cell
+def _():
     import os
     LOCATION = os.environ.get("LOCATION", "us-central1") 
-    PROJECT_ID = os.environ.get("PROJECT_ID", "us-central1")
-    
-    return LOCATION, PROJECT_ID
-)
+    USER_AGENT = "cloud-solutions/data-to-ai-nb-v3"
+    BQ_DATASET = "ridership_lakehouse_staging"
+
+    PROJECT_ID = os.environ.get("PROJECT_ID")
+    if not PROJECT_ID:
+        import subprocess
+        PROJECT_ID = subprocess.run(["gcloud", "config", "get-value", "project"], capture_output=True)
+        PROJECT_ID = PROJECT_ID.stdout.decode("utf-8").strip()
+    assert PROJECT_ID, "Please set the PROJECT_ID environment variable"
+    BUCKET_NAME = f"{PROJECT_ID}-ridership-lakehouse"
+    return (
+        BQ_DATASET,
+        BUCKET_NAME,
+        LOCATION,
+        PROJECT_ID,
+        USER_AGENT,
+        os,
+        subprocess,
+    )
 
 
 @app.cell
 def _(LOCATION, PROJECT_ID, USER_AGENT):
     from google.cloud import bigquery, storage
-    # @title Create clients for gcs and bq
     from google.api_core.client_info import ClientInfo
 
     bigquery_client = bigquery.Client(
@@ -67,47 +70,30 @@ def _(LOCATION, PROJECT_ID, USER_AGENT):
         project=PROJECT_ID,
         client_info=ClientInfo(user_agent=USER_AGENT)
     )
-    return bigquery, bigquery_client, storage_client
-
-
-@app.cell
-def _(BUCKET_NAME, LOCATION, storage_client):
-    # @title Create GCS bucket, or reference the existing one
-    from google.cloud import exceptions
-
-    try:
-        bucket = storage_client.create_bucket(BUCKET_NAME, location=LOCATION)
-        print(f"Bucket {BUCKET_NAME} created")
-    except exceptions.Conflict:
-        # Bucket already exists - return the existing bucket
-        bucket = storage_client.bucket(BUCKET_NAME)
-        print(f"Bucket {BUCKET_NAME} already exists")
-    except Exception as e:
-        print(f"Error creating bucket {BUCKET_NAME}: {e}")
-    return (exceptions,)
+    return bigquery, bigquery_client
 
 
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(
         r"""
-        ## MTA Data
+    ## MTA Data
 
-        This part is tricky - this is the raw data from the MTA subways of new york.
-        The MTA website and API are slow... very slow. Checking the [hourly ridership data](https://data.ny.gov/Transportation/MTA-Subway-Hourly-Ridership-2020-2024/wujg-7c2s/about_data), we have about 110 million records to get.
+    This part is tricky - this is the raw data from the MTA subways of new york.
+    The MTA website and API are slow... very slow. Checking the [hourly ridership data](https://data.ny.gov/Transportation/MTA-Subway-Hourly-Ridership-2020-2024/wujg-7c2s/about_data), we have about 110 million records to get.
 
-        Downloading the CSV manually is the more efficiant option, but still very slow, so you would have to send the request, and keep your machine awake and browser for a few hours (yes, hours, was about 2 hours in my case) before the CSV starts downloading.
+    Downloading the CSV manually is the more efficiant option, but still very slow, so you would have to send the request, and keep your machine awake and browser for a few hours (yes, hours, was about 2 hours in my case) before the CSV starts downloading.
 
-        for programatic download using the API, the situation might be worse. the API is prone to timeouts. The default records limit per request is 1,000, and the maximum is 50,000, which means we have to do chunking of API calls, but the latency is increasing expo. when increasing the limit.
+    for programatic download using the API, the situation might be worse. the API is prone to timeouts. The default records limit per request is 1,000, and the maximum is 50,000, which means we have to do chunking of API calls, but the latency is increasing expo. when increasing the limit.
 
-        I've written the function to donwload the data and write each request to be appended to a file, but this ran for 4 hours, and got around 8% of the data, before I gave up.
+    I've written the function to donwload the data and write each request to be appended to a file, but this ran for 4 hours, and got around 8% of the data, before I gave up.
 
-        The next cell has the function to download the data using the API, but the call to the function is commented out, since it is very slow to run.
+    The next cell has the function to download the data using the API, but the call to the function is commented out, since it is very slow to run.
 
-        the cell after that allows you to fill in the path to GCS, so, whichever method you want to get the data, just make sure, that the variable `MTA_RAW_CSV` points to a valid and accisble path on GCS that holds the MTA hourly ridership data.
+    the cell after that allows you to fill in the path to GCS, so, whichever method you want to get the data, just make sure, that the variable `MTA_RAW_CSV` points to a valid and accisble path on GCS that holds the MTA hourly ridership data.
 
-        happy thoughts!
-        """
+    happy thoughts!
+    """
     )
     return
 
@@ -116,68 +102,91 @@ def _(mo):
 def _(os):
     from csv import DictWriter
     from sodapy import Socrata
-    FORCE_CLEAR_DATA = False
     FILENAME = 'raw-mta-data.csv'
     fieldnames = ['transit_timestamp', 'transit_mode', 'station_complex_id', 'station_complex', 'borough', 'payment_method', 'fare_class_category', 'ridership', 'transfers', 'latitude', 'longitude', 'georeference', ':@computed_region_kjdx_g34t', ':@computed_region_yamh_8v7k', ':@computed_region_wbg7_3whc']
+
+    # This function will use the api to download the data into a csv locally
+    # Note that the final size of the CSV would be around 17GB
+    # also note that the API is slow and prone to timeout errors
+    # this is why it has a back-off mechanism where we start with the
+    # maximum records allowed and back off whenever we have a timeout error
+    # as mentioned above, a much easier approach would be to go to the website 
+    # and download the CSV manually (although that takes some time as well)
+    # then upload the CSV to GCS
+    # This method is here for convenience and is not currently being called.
+
+    # this method was planned to be able to resume from where it last stopped
+    # we have the option to read an existing CSV that we started downloading
+    # if you want to ignore the existing file, you can delete it manually or just flip this flag
+    FORCE_CLEAR_DATA = False
 
     def programmatically_download_mta_data():
         import requests
         client = Socrata('data.ny.gov', None)
-        TOTAL_NUMBER_OF_RECORDS = 110696370
-        STEP = 50000
+
+        # I got this number after downloading the full file and looking at it.
+        # Since this should be a static dataset, the number shouldn't change over time
+        TOTAL_NUMBER_OF_RECORDS = 110_696_370
+        STEP = 50_000
+
+        # is there is current file already exists
         existing_file = os.path.exists(FILENAME)
+    
         if not existing_file or FORCE_CLEAR_DATA:
+            # if we no current file exists, or flag to ignore it is raised
             rows_got = 0
             with open(FILENAME, 'w') as fp:
                 writer = DictWriter(fp, fieldnames=fieldnames)
+                # write headers
                 writer.writeheader()
         else:
             with open(FILENAME, 'r') as f:
+                # read how many records we have already (minus 1 for headers)
                 rows_got = sum((1 for line in f)) - 1
-            print(f'Starting from existing data. already got {rows_got:,} records ({round(rows_got / TOTAL_NUMBER_OF_RECORDS * 100, 2)}%)')
+            print(f'''Starting from existing data. already got {rows_got:,}
+            records ({round(rows_got / TOTAL_NUMBER_OF_RECORDS * 100, 2)}%)''')
+    
+        # while the number of rows we got is smaller then the total number of rows expected
         while rows_got < TOTAL_NUMBER_OF_RECORDS:
             try:
+                # get more data
                 results = client.get('wujg-7c2s', limit=STEP, offset=rows_got)
             except requests.exceptions.ReadTimeout as te:
+                # in case of a timeout, ask for less data
                 STEP = STEP - 1000
                 print(f'Got timeout, adjusting limit to {STEP}')
             else:
+                # when we get data, append it to the file. 
                 with open(FILENAME, 'a') as fp:
                     writer = DictWriter(fp, fieldnames=fieldnames)
                     writer.writerows(results)
                 rows_got = rows_got + len(results)
                 print(f'Got {rows_got:,} rows so far ({round(rows_got / TOTAL_NUMBER_OF_RECORDS * 100, 2)}%)')
+
+        # TODO: implement code to upload the local CSV to GCS
     return (DictWriter,)
 
 
-app._unparsable_cell(
-    r"""
-    MTA_RAW_CSV_PATH_IN_GCS = \"mta-manual-downloaded-data/MTA_Subway_Hourly_Ridership.csv\"  # @param {type: 'string'}
-    MTA_RAW_CSV = f\"gs://{BUCKET_NAME}/{MTA_RAW_CSV_PATH_IN_GCS}\"
+@app.cell
+def _(BUCKET_NAME, subprocess):
+    # This should be a path pointing to the file in GCS. 
+    MTA_RAW_CSV_PATH_IN_GCS = "mta-manual-downloaded-data/MTA_Subway_Hourly_Ridership.csv"  # @param {type: 'string'}
+    MTA_RAW_CSV = f"gs://{BUCKET_NAME}/{MTA_RAW_CSV_PATH_IN_GCS}"
 
-    blob_exists_output = !gsutil ls {MTA_RAW_CSV}
+    blob_exists_output = subprocess.run(["gsutil", "ls", MTA_RAW_CSV], capture_output=True)
 
-    if blob_exists_output[0].startswith(\"CommandException\"):
-      raise ValueError(f\"Path '{MTA_RAW_CSV}' doesn't appear to point to a valid GCS object\")
+    if blob_exists_output.returncode != 0:
+        print(blob_exists_output.stderr.decode("utf-8"))
+        raise ValueError(f"Path '{MTA_RAW_CSV}' doesn't appear to point to a valid GCS object")
     else:
-      print(f\"Path '{MTA_RAW_CSV}' found\")
-    """,
-    name="_"
-)
+      print(f"Path '{MTA_RAW_CSV}' found")
+    return (MTA_RAW_CSV,)
 
 
 @app.cell
-def _(
-    BQ_DATASET,
-    LOCATION,
-    MTA_RAW_CSV,
-    PROJECT_ID,
-    bigquery,
-    bigquery_client,
-    exceptions,
-):
-    # @title Load raw data to a BQ, to continue transformation of the data
-    # Due to it's size, it will be easier to load data to bq and transform it there
+def _(BQ_DATASET, MTA_RAW_CSV, PROJECT_ID, bigquery, bigquery_client):
+    # Load raw data to a BQ, to continue transformation of the data
+    # Due to its size, it will be easier to load data to bq and transform it there
 
     from google.cloud.bigquery import SchemaField
 
@@ -201,15 +210,6 @@ def _(
     BQ_TABLE = "raw_mta_data"
 
     dataset = bigquery.Dataset(f'{PROJECT_ID}.{BQ_DATASET}')
-    dataset.location = LOCATION
-
-    # create or get a reference to existing dataset
-    try:
-      bigquery_client.get_dataset(BQ_DATASET)
-      print("dataset exists")
-    except exceptions.NotFound:
-      bigquery_client.create_dataset(dataset, timeout=30)
-      print('dataset created {}'.format(BQ_DATASET))
 
     try:
         table_ref = dataset.table(BQ_TABLE)
@@ -335,9 +335,9 @@ def _(stations_df):
 def _(mo):
     mo.md(
         r"""
-        ## Extract data to GCS
-        Now, that we have all data we need, the data needs to reside in GCS. We will extract the `ridership` BigQuery table to GCS as a CSV, we will store the local datasets (`bus_lines` & `fake_stations_lst`) we will save to local files (JSONL and CSV, respectively) and upload to GCS.
-        """
+    ## Extract data to GCS
+    Now, that we have all data we need, the data needs to reside in GCS. We will extract the `ridership` BigQuery table to GCS as a CSV, we will store the local datasets (`bus_lines` & `fake_stations_lst`) we will save to local files (JSONL and CSV, respectively) and upload to GCS.
+    """
     )
     return
 

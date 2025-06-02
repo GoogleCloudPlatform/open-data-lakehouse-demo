@@ -9,7 +9,8 @@ app = Flask(__name__, template_folder="templates")
 # You can mount multiple notebooks if needed
 marimo_server = (
     marimo.create_asgi_app(include_code=False, quiet=True) # Set include_code to False for production
-    .with_app(path="/notebooks/data-analysis", root="./src/notebooks/data_analysis.py")
+    .with_app(path="/notebooks/part-0", root="./src/notebooks/lakehouse_part0_data_generation.py")
+    .with_app(path="/notebooks/part-1", root="./src/notebooks/lakehouse_part1_load_data.py")
     # Add more .with_app() calls for other Marimo notebooks
 )
 
@@ -53,8 +54,8 @@ flask_asgi_app = WsgiToAsgi(app)
 # Dummy mount point for conceptual understanding, as `uvicorn` handles this
 # with a single entry point by calling `app.py` and then we route
 # based on path.
-# from werkzeug.middleware.proxy_fix import ProxyFix # If you're behind a proxy, like Cloud Run
-# app.wsgi_app = ProxyFix(app.wsgi_app) # Use if needed
+from werkzeug.middleware.proxy_fix import ProxyFix # If you're behind a proxy, like Cloud Run
+app.wsgi_app = ProxyFix(app.wsgi_app) # Use if needed
 
 @app.route("/")
 def index():
