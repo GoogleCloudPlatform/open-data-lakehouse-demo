@@ -14,9 +14,9 @@
 
 
 locals {
-  artifact_repo      = "open-lakehouse-demo"
+  artifact_repo      = "open-lakehouse-demo-docker-repo"
   image_name         = "open-lakehouse-demo-webapp"
-  cloud_build_fileset = fileset(path.module, "../src/**/*")
+  cloud_build_fileset = fileset(path.module, "../src/**")
   cloud_build_content_hash = sha512(join("", [for f in local.cloud_build_fileset : filesha512("${path.module}/${f}")]))
   image_name_and_tag = "${var.region}-docker.pkg.dev/${var.project_id}/${local.artifact_repo}/${local.image_name}:latest"
 }
@@ -25,7 +25,7 @@ resource "google_artifact_registry_repository" "docker_repo" {
   project       = var.project_id
   format        = "DOCKER"
   location      = var.region
-  repository_id = "open-lakehouse-demo-docker-repo"
+  repository_id = local.artifact_repo
   description   = "Docker containers"
 }
 
@@ -45,12 +45,12 @@ module "cloud_build_account" {
 }
 
 # See github.com/terraform-google-modules/terraform-google-gcloud
-module "gcloud_build_specialized_parser" {
+module "gcloud_build_webapp" {
   source = "github.com/terraform-google-modules/terraform-google-gcloud" # commit hash of version 3.5.0
   create_cmd_entrypoint = "gcloud"
   create_cmd_body       = <<-EOT
     builds submit ${path.module}/../src \
-      --pack image=${local.image_name_and_tag} \
+      --tag ${local.image_name_and_tag} \
       --project ${var.project_id} \
       --region ${var.region} \
       --default-buckets-behavior regional-user-owned-bucket \

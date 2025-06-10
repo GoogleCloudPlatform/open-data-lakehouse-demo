@@ -26,6 +26,10 @@ module "project_services" {
     "run.googleapis.com",
     "compute.googleapis.com",
     "managedkafka.googleapis.com",
+    "aiplatform.googleapis.com",
+    "dataform.googleapis.com",
+    "bigqueryconnection.googleapis.com",
+    "bigquerystorage.googleapis.com",
   ]
 
   # Provide more access to the cloudbuild service account

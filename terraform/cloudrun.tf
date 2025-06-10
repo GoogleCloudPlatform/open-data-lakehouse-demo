@@ -29,7 +29,7 @@ resource "google_cloud_run_service" "default" {
         resources {
           limits = {
             cpu    = "1000m"
-            memory = "512Mi"
+            memory = "2Gi"
           }
         }
       }
@@ -48,11 +48,12 @@ resource "google_cloud_run_service" "default" {
 
   depends_on = [
     google_artifact_registry_repository.docker_repo,
+    module.gcloud_build_webapp,
     module.project_services
   ]
 }
 
 output "cloud_run_url" {
   description = "The URL of the deployed Cloud Run service"
-  value       = google_cloud_run_service.default.status.url
+  value       = google_cloud_run_service.default.status[0].url
 }

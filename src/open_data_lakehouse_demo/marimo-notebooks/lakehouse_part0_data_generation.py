@@ -1,7 +1,13 @@
 import marimo
 
-__generated_with = "0.13.13"
-app = marimo.App()
+__generated_with = "0.13.15"
+app = marimo.App(width="medium")
+
+
+@app.cell(hide_code=True)
+def _():
+    import marimo as mo
+    return (mo,)
 
 
 @app.cell(hide_code=True)
@@ -45,15 +51,7 @@ def _():
         PROJECT_ID = PROJECT_ID.stdout.decode("utf-8").strip()
     assert PROJECT_ID, "Please set the PROJECT_ID environment variable"
     BUCKET_NAME = f"{PROJECT_ID}-ridership-lakehouse"
-    return (
-        BQ_DATASET,
-        BUCKET_NAME,
-        LOCATION,
-        PROJECT_ID,
-        USER_AGENT,
-        os,
-        subprocess,
-    )
+    return BQ_DATASET, BUCKET_NAME, LOCATION, PROJECT_ID, USER_AGENT, os
 
 
 @app.cell
@@ -70,14 +68,14 @@ def _(LOCATION, PROJECT_ID, USER_AGENT):
         project=PROJECT_ID,
         client_info=ClientInfo(user_agent=USER_AGENT)
     )
-    return bigquery, bigquery_client
+    return bigquery, bigquery_client, storage_client
 
 
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(
         r"""
-    ## MTA Data
+    ## MTA Data - PLEASE READ!
 
     This part is tricky - this is the raw data from the MTA subways of new york.
     The MTA website and API are slow... very slow. Checking the [hourly ridership data](https://data.ny.gov/Transportation/MTA-Subway-Hourly-Ridership-2020-2024/wujg-7c2s/about_data), we have about 110 million records to get.
@@ -131,7 +129,7 @@ def _(os):
 
         # is there is current file already exists
         existing_file = os.path.exists(FILENAME)
-    
+
         if not existing_file or FORCE_CLEAR_DATA:
             # if we no current file exists, or flag to ignore it is raised
             rows_got = 0
@@ -145,13 +143,13 @@ def _(os):
                 rows_got = sum((1 for line in f)) - 1
             print(f'''Starting from existing data. already got {rows_got:,}
             records ({round(rows_got / TOTAL_NUMBER_OF_RECORDS * 100, 2)}%)''')
-    
+
         # while the number of rows we got is smaller then the total number of rows expected
         while rows_got < TOTAL_NUMBER_OF_RECORDS:
             try:
                 # get more data
                 results = client.get('wujg-7c2s', limit=STEP, offset=rows_got)
-            except requests.exceptions.ReadTimeout as te:
+            except requests.exceptions.ReadTimeout:
                 # in case of a timeout, ask for less data
                 STEP = STEP - 1000
                 print(f'Got timeout, adjusting limit to {STEP}')
@@ -168,19 +166,19 @@ def _(os):
 
 
 @app.cell
-def _(BUCKET_NAME, subprocess):
+def _(BUCKET_NAME, storage_client):
     # This should be a path pointing to the file in GCS. 
-    MTA_RAW_CSV_PATH_IN_GCS = "mta-manual-downloaded-data/MTA_Subway_Hourly_Ridership.csv"  # @param {type: 'string'}
+    MTA_RAW_CSV_PATH_IN_GCS = "mta-manual-downloaded-data/MTA_Subway_Hourly_Ridership.csv"
     MTA_RAW_CSV = f"gs://{BUCKET_NAME}/{MTA_RAW_CSV_PATH_IN_GCS}"
 
-    blob_exists_output = subprocess.run(["gsutil", "ls", MTA_RAW_CSV], capture_output=True)
+    bucket = storage_client.bucket(BUCKET_NAME)
+    _mta_raw_csv_blob = bucket.get_blob(MTA_RAW_CSV_PATH_IN_GCS)
 
-    if blob_exists_output.returncode != 0:
-        print(blob_exists_output.stderr.decode("utf-8"))
-        raise ValueError(f"Path '{MTA_RAW_CSV}' doesn't appear to point to a valid GCS object")
+    if _mta_raw_csv_blob:
+        print(f"Path '{MTA_RAW_CSV}' found")
     else:
-      print(f"Path '{MTA_RAW_CSV}' found")
-    return (MTA_RAW_CSV,)
+        raise ValueError(f"Path '{MTA_RAW_CSV}' doesn't appear to point to a valid GCS object")
+    return MTA_RAW_CSV, bucket
 
 
 @app.cell
@@ -232,15 +230,26 @@ def _(BQ_DATASET, MTA_RAW_CSV, PROJECT_ID, bigquery, bigquery_client):
     return (dataset,)
 
 
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(
+        r"""
+    ### The `mta_data_stations` table
+
+    the raw data has a non-normalized dataset, where each station appear in full detail, for each hourly data point
+    we will create a table just for the stations, and we will reference the `station_id` from the thinner time-series table.
+
+    note, we are saving the results to a pandas dataframe, to be used later
+    """
+    )
+    return
+
+
 @app.cell
 def _(BQ_DATASET, bigquery_client):
     bigquery_client.query(f"DROP TABLE IF EXISTS {BQ_DATASET}.mta_data_stations;").result()
 
-    # the raw data has a non-normalized dataset, where each station appear in full detail, for each hourly data point
-    # we will create a table just for the stations, and we will reference the `station_id` from the thinner time-series table.
-    # note, we are saving the results to a pandas dataframe, to be used later
-
-    query = f"""
+    _query = f"""
     CREATE TABLE {BQ_DATASET}.mta_data_stations AS
     SELECT
       CAST(REPLACE(station_complex_id, 'TRAM', '98765') AS INT64) AS station_id,
@@ -259,40 +268,129 @@ def _(BQ_DATASET, bigquery_client):
     WHERE
       rn = 1;
     """
-    bigquery_client.query(query).result()
+    bigquery_client.query(_query).result()
 
     stations_df = bigquery_client.query(f"SELECT * FROM {BQ_DATASET}.mta_data_stations;").to_dataframe()
     stations_df
     return (stations_df,)
 
 
-@app.cell
-def _(BQ_DATASET, bigquery_client):
-    bigquery_client.query(f'DROP TABLE IF EXISTS {BQ_DATASET}.mta_data_parsed;').result()
-    query_1 = f"\nCREATE TABLE `{BQ_DATASET}.mta_data_parsed` AS\nSELECT\n  PARSE_TIMESTAMP('%m/%d/%Y %I:%M:%S %p', transit_timestamp) AS `transit_timestamp`,\n  CAST(REPLACE(station_complex_id, 'TRAM', '98765') AS INT64) AS `station_id`,\n  SUM(ridership) as ridership\nFROM `{BQ_DATASET}.raw_mta_data`\nGROUP BY PARSE_TIMESTAMP('%m/%d/%Y %I:%M:%S %p', transit_timestamp), CAST(REPLACE(station_complex_id, 'TRAM', '98765') AS INT64);\n"
-    bigquery_client.query(query_1).result()
-    bigquery_client.query(f'SELECT * FROM {BQ_DATASET}.mta_data_parsed LIMIT 20;').to_dataframe()
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(
+        r"""
+    ### The `mta_data_parsed` table - temporary table
+
+    This table is a temporary table to hold an hourly data points, with parsed timestamps and station IDs as integers.
+    """
+    )
     return
 
 
 @app.cell
 def _(BQ_DATASET, bigquery_client):
-    bigquery_client.query(f'DROP TABLE IF EXISTS {BQ_DATASET}.ridership;').result()
-    query_2 = f'\nCREATE TABLE `{BQ_DATASET}.ridership` AS\nSELECT\n  TIMESTAMP_ADD(t.transit_timestamp, INTERVAL minute_offset MINUTE) AS transit_timestamp,\n  t.station_id,\n  ROUND(CAST(\n    (FLOOR(t.ridership / 60)) +\n    CASE\n      WHEN minute_offset < MOD(t.ridership, 60) THEN 1\n      ELSE 0\n    END AS INTEGER\n  )) AS ridership\nFROM\n  {BQ_DATASET}.mta_data_parsed AS t,\n  UNNEST(GENERATE_ARRAY(0, 59)) AS minute_offset\nORDER BY\n  station_id,\n  transit_timestamp;\n'
-    bigquery_client.query(query_2).result()
+    bigquery_client.query(
+        f'DROP TABLE IF EXISTS {BQ_DATASET}.mta_data_parsed;'
+    ).result()
+
+    _query = f"""
+        CREATE TABLE `{BQ_DATASET}.mta_data_parsed` AS
+            SELECT
+                PARSE_TIMESTAMP('%m/%d/%Y %I:%M:%S %p', transit_timestamp) AS `transit_timestamp`,
+                CAST(REPLACE(station_complex_id, 'TRAM', '98765') AS INT64) AS `station_id`,
+                SUM(ridership) as ridership
+            FROM `{BQ_DATASET}.raw_mta_data`
+            GROUP BY PARSE_TIMESTAMP('%m/%d/%Y %I:%M:%S %p', transit_timestamp),
+            CAST(REPLACE(station_complex_id, 'TRAM', '98765') AS INT64);
+    """
+    bigquery_client.query(_query).result()
+    bigquery_client.query(f'SELECT * FROM {BQ_DATASET}.mta_data_parsed LIMIT 20;').to_dataframe()
+    return
+
+
+@app.cell
+def _(mo):
+    mo.md(
+        r"""
+    ### The `ridership` table
+
+    This is the output table to hold minute-by-minute data points, spreading each hour evenly between 60 minutes within the hour.
+    """
+    )
+    return
+
+
+@app.cell
+def _(BQ_DATASET, bigquery_client):
+    bigquery_client.query(
+        f'DROP TABLE IF EXISTS {BQ_DATASET}.ridership;'
+    ).result()
+    _query = f"""
+        CREATE TABLE `{BQ_DATASET}.ridership` AS
+        SELECT
+            TIMESTAMP_ADD(t.transit_timestamp, INTERVAL minute_offset MINUTE) AS transit_timestamp,
+            t.station_id,
+            ROUND(CAST(
+                (FLOOR(t.ridership / 60)) +
+                CASE
+                    WHEN minute_offset < MOD(t.ridership, 60) THEN 1
+                    ELSE 0
+                END AS INTEGER
+            )) AS ridership
+        FROM {BQ_DATASET}.mta_data_parsed AS t,
+        UNNEST(GENERATE_ARRAY(0, 59)) AS minute_offset
+        ORDER BY station_id, transit_timestamp;
+    """
+    bigquery_client.query(_query).result()
     bigquery_client.query(f'SELECT * FROM {BQ_DATASET}.ridership LIMIT 20;').to_dataframe()
     return
 
 
 @app.cell
 def _(BQ_DATASET, bigquery_client):
-    query_3 = f'\nWITH minutly_agg AS (\n  SELECT TIMESTAMP_TRUNC(transit_timestamp, hour) AS transit_timestamp,\n  station_id,\n  SUM(ridership) AS ridership_agg\n  FROM `{BQ_DATASET}.ridership`\n  GROUP BY TIMESTAMP_TRUNC(transit_timestamp, hour),\n  station_id\n)\nSELECT\n  minutly_agg.transit_timestamp, minutly_agg.station_id, minutly_agg.ridership_agg, parsed.ridership\nFROM minutly_agg JOIN `{BQ_DATASET}.mta_data_parsed` as parsed ON\n  minutly_agg.transit_timestamp = parsed.transit_timestamp AND\n  minutly_agg.station_id = parsed.station_id\nWHERE minutly_agg.ridership_agg != parsed.ridership\n'
-    bigquery_client.query(query_3).to_dataframe()
+    # This query is just a verification that the sum of each hour in our minute-by-minute data equals to the data in
+    # the temporary hourly data
+    # The query re-aggregates the data by hour, and compars to the original hourly data
+    # it should return 0 rows, as it filters for hours where the sum of ridership in an hour doesn't equal the original data.
+    _query = f"""
+        WITH minutly_agg AS (
+            SELECT
+                TIMESTAMP_TRUNC(transit_timestamp, hour) AS transit_timestamp,
+                station_id,
+                SUM(ridership) AS ridership_agg
+            FROM `{BQ_DATASET}.ridership`
+            GROUP BY TIMESTAMP_TRUNC(transit_timestamp, hour), station_id
+        )
+        SELECT
+            minutly_agg.transit_timestamp,
+            minutly_agg.station_id,
+            minutly_agg.ridership_agg,
+            parsed.ridership
+        FROM minutly_agg
+        JOIN `{BQ_DATASET}.mta_data_parsed` as parsed
+            ON minutly_agg.transit_timestamp = parsed.transit_timestamp AND
+                minutly_agg.station_id = parsed.station_id
+        WHERE minutly_agg.ridership_agg != parsed.ridership"""
+    bigquery_client.query(_query).to_dataframe()
     return
 
 
 @app.cell
-def _(stations_df):
+def _(mo):
+    mo.md(
+        r"""
+    ## Generate fake data for bus lines and bus stops (routes)
+
+    This is based on the stations data in thr original dataset, but the station addresses are faked (using faker),
+    and then routes are being constructed just by picking randomly from the stations list. We're using `random.sample`
+    to select a range but without duplicates (as that might create a circular route for a bus, which is not a typical route)
+    """
+    )
+    return
+
+
+@app.cell
+def _(station_ids, stations_df):
     # @title Generate fake data for bus lines and bus stops (Routes)
 
     from faker import Faker
@@ -306,7 +404,7 @@ def _(stations_df):
           "bus_line_id": i+1,
           "bus_line": fake.unique.bothify("?-###").upper(),
           "number_of_stops": number_of_stops,
-          "stops": [random.choice(stations_ids) for _ in range(number_of_stops)]
+          "stops": random.sample(station_ids, k=number_of_stops)
       }
 
     def fakify_station(station: dict) -> dict:
@@ -336,7 +434,10 @@ def _(mo):
     mo.md(
         r"""
     ## Extract data to GCS
-    Now, that we have all data we need, the data needs to reside in GCS. We will extract the `ridership` BigQuery table to GCS as a CSV, we will store the local datasets (`bus_lines` & `fake_stations_lst`) we will save to local files (JSONL and CSV, respectively) and upload to GCS.
+
+    Now, that we have all data we need, the data needs to reside in GCS. We will extract the `ridership` BigQuery table
+    to GCS as a CSV, we will store the local datasets (`bus_lines` & `fake_stations_lst`) we will save to local files
+    (JSONL and CSV, respectively) and upload to GCS.
     """
     )
     return
@@ -366,13 +467,14 @@ def _(DictWriter, bus_lines, fake_stations_lst):
     return
 
 
-app._unparsable_cell(
-    r"""
-    !gsutil cp bus_lines.json gs://{BUCKET_NAME}/mta_staging_data/bus_lines.json
-    !gsutil cp bus_stations.csv gs://{BUCKET_NAME}/mta_staging_data/bus_stations.csv
-    """,
-    name="_"
-)
+@app.cell
+def _(bucket):
+    _bus_lines_blob = bucket.blob("mta_staging_data/bus_lines.json")
+    _bus_lines_blob.upload_from_filename("bus_lines.json")
+
+    _bus_stations_blob = bucket.blob("mta_staging_data/bus_stations.csv")
+    _bus_stations_blob.upload_from_filename("bus_stations.csv")
+    return
 
 
 @app.cell
@@ -385,12 +487,6 @@ def _():
     # except exceptions.NotFound:
     #   print("Dataset looks already dropped")
     return
-
-
-@app.cell
-def _():
-    import marimo as mo
-    return (mo,)
 
 
 if __name__ == "__main__":

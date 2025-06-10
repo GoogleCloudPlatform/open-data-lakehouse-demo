@@ -9,28 +9,25 @@
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS IS" BASIS,
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
+# See the License for the specific language govemrning permissions and
 # limitations under the License.
 
 
-resource "google_storage_bucket" "data_lakehouse_bucket" {
-  name          = "${var.project_id}-ridership-lakehouse"
-  location      = var.region
-  force_destroy = true
-  project       = var.project_id
-
-  uniform_bucket_level_access = true
-
-  lifecycle_rule {
-    action {
-      type = "Delete"
-    }
-    condition {
-      age = 365
+resource "google_project_organization_policy" "org_policy_vm_external_ip_access" {
+  project    = var.project_id
+  constraint = "compute.vmExternalIpAccess"
+  list_policy {
+    allow {
+      all = true
     }
   }
 }
 
-output "gcs_bucket" {
-  value = google_storage_bucket.data_lakehouse_bucket.name
+resource "google_project_organization_policy" "org_policy_require_shielded_vm" {
+  project    = var.project_id
+  constraint = "compute.requireShieldedVm"
+  boolean_policy {
+    enforced = false
+  }
 }
+
