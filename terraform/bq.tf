@@ -66,3 +66,7 @@ output "staging_dataset_id" {
 output "main_dataset_id" {
   value = google_bigquery_dataset.ridership_lakehouse.dataset_id
 }
+
+output "bq_connection_id" {
+  value = google_bigquery_connection.cloud_resources_connection.connection_id
+}
