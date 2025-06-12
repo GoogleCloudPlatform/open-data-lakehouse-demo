@@ -44,6 +44,17 @@ module "cloud_build_account" {
   description  = "specific custom service account for Cloud Build"
 }
 
+# Propagation time for change of access policy typically takes 2 minutes
+# according to https://cloud.google.com/iam/docs/access-change-propagation
+# this wait make sure the policy changes are propagated before proceeding
+# with the build
+resource "time_sleep" "wait_for_policy_propagation" {
+  create_duration = "120s"
+  depends_on = [
+    module.cloud_build_account
+  ]
+}
+
 # See github.com/terraform-google-modules/terraform-google-gcloud
 module "gcloud_build_webapp" {
   source = "github.com/terraform-google-modules/terraform-google-gcloud" # commit hash of version 3.5.0
@@ -61,4 +72,10 @@ module "gcloud_build_webapp" {
   create_cmd_triggers = {
     source_contents_hash = local.cloud_build_content_hash
   }
+
+  depends_on = [
+    time_sleep.wait_for_policy_propagation
+  ]
 }
+
+
