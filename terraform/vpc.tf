@@ -12,6 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+locals {
+  cidr = "10.0.1.0/24"
+}
 
 # main VPC
 resource "google_compute_network" "open-lakehouse-network" {
@@ -26,6 +29,21 @@ resource "google_compute_subnetwork" "open-lakehouse-subnetwork" {
   network                  = google_compute_network.open-lakehouse-network.id
   project                  = var.project_id
   region                   = var.region
-  ip_cidr_range            = "10.0.1.0/24"
+  ip_cidr_range            = local.cidr
   private_ip_google_access = true
+}
+
+resource "google_compute_firewall" "allow_internal_ingress" {
+  project = var.project_id
+  name    = "allow-internal-ingress"
+  network = google_compute_network.open-lakehouse-network.id
+
+  allow {
+    protocol = "all"
+  }
+
+  source_ranges = [local.cidr]
+  destination_ranges = [local.cidr]
+  direction = "INGRESS"
+  priority  = 1000
 }

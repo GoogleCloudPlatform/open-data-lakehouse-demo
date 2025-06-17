@@ -31,3 +31,11 @@ resource "google_project_organization_policy" "org_policy_require_shielded_vm" {
   }
 }
 
+resource "google_project_organization_policy" "org_policy_require_os_login" {
+  project    = var.project_id
+  constraint = "compute.requireOsLogin"
+  boolean_policy {
+    enforced = false
+  }
+}
+
