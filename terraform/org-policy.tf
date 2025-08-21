@@ -39,3 +39,12 @@ resource "google_project_organization_policy" "org_policy_require_os_login" {
   }
 }
 
+resource "google_project_organization_policy" "allow_policy_member_domains" {
+  constraint = "constraints/iam.allowedPolicyMemberDomains"
+  project    = var.project_id
+  list_policy {
+    allow {
+      all = true
+    }
+  }
+}

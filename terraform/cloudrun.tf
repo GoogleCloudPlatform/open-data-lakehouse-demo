@@ -12,48 +12,73 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-resource "google_cloud_run_service" "default" {
-  provider                   = google
-  name                       = "open-data-lakehouse-demo"
-  location                   = var.region
-  project                    = var.project_id
-  autogenerate_revision_name = true
+# a null resource that is connected to the content_hash from build.tf
+resource "null_resource" "deployment_trigger" {
+  triggers = {
+    source_contents_hash = local.cloud_build_content_hash
+  }
+}
+
+# the cloud service
+resource "google_cloud_run_v2_service" "default" {
+  provider = google
+  name     = "open-data-lakehouse-demo"
+  location = var.region
+  project  = var.project_id
+  ingress  = "INGRESS_TRAFFIC_ALL"
+
+  deletion_protection = false # set to "true" in production
 
   template {
-    spec {
-      containers {
-        image = "${var.region}-docker.pkg.dev/${var.project_id}/${google_artifact_registry_repository.docker_repo.repository_id}/${local.image_name}:latest"
-        ports {
-          container_port = 8080
-        }
-        resources {
-          limits = {
-            cpu    = "1000m"
-            memory = "2Gi"
-          }
-        }
+    containers {
+      image = "${var.region}-docker.pkg.dev/${var.project_id}/${google_artifact_registry_repository.docker_repo.repository_id}/${local.image_name}:latest"
+      ports {
+        container_port = 8080
       }
-    }
-    metadata {
-      annotations = {
-        "run.googleapis.com/allow-unauthenticated" = "true"
+      resources {
+        limits = {
+          cpu    = "1000m"
+          memory = "2Gi"
+        }
       }
     }
   }
 
   traffic {
-    percent         = 100
-    latest_revision = true
+    type    = "TRAFFIC_TARGET_ALLOCATION_TYPE_LATEST"
+    percent = 100
   }
 
   depends_on = [
     google_artifact_registry_repository.docker_repo,
-    module.gcloud_build_webapp,
-    module.project_services
+    module.gcloud_build_webapp.wait,
+    module.project_services,
+    google_project_organization_policy.allow_policy_member_domains
+  ]
+
+  lifecycle {
+    replace_triggered_by = [null_resource.deployment_trigger]
+  }
+  invoker_iam_disabled = true
+
+}
+
+resource "google_cloud_run_v2_service_iam_binding" "default" {
+  project  = var.project_id
+  location = google_cloud_run_v2_service.default.location
+  name     = google_cloud_run_v2_service.default.name
+  role     = "roles/run.invoker"
+  members = [
+    "allUsers"
+  ]
+
+  depends_on = [
+    google_cloud_run_v2_service.default,
+    google_project_organization_policy.allow_policy_member_domains
   ]
 }
 
 output "cloud_run_url" {
   description = "The URL of the deployed Cloud Run service"
-  value       = google_cloud_run_service.default.status[0].url
+  value       = google_cloud_run_v2_service.default.uri
 }

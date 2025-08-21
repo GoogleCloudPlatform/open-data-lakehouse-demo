@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+
 # Creates a BigQuery dataset for staging ridership data.
 # This dataset is used for temporary storage and preparation of data
 # before it's loaded into the main data lakehouse.
