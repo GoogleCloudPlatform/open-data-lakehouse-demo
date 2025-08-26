@@ -32,6 +32,9 @@ dependencies = [
     "ruff>=0.11.13",
     "jupyterlab>=4.4.3",
     "pyiceberg[gcsfs]>=0.9.1",
+    "kafka-python>=2.2.15",
+    "flask-executor>=1.0.0",
+    "google-cloud-logging>=3.12.1",
 ]
 
 [build-system]

@@ -30,10 +30,19 @@ resource "google_cloud_run_v2_service" "default" {
   deletion_protection = false # set to "true" in production
 
   template {
+
     containers {
       image = "${var.region}-docker.pkg.dev/${var.project_id}/${google_artifact_registry_repository.docker_repo.repository_id}/${local.image_name}:latest"
       ports {
         container_port = 8080
+      }
+      env {
+        name  = "BQ_DATASET"
+        value = google_bigquery_dataset.ridership_lakehouse.dataset_id
+      }
+      env {
+        name  = "KAFKA_BOOTSTRAP"
+        value = "bootstrap.${google_managed_kafka_cluster.default.cluster_id}.${google_managed_kafka_cluster.default.location}.managedkafka.${var.project_id}.cloud.goog:9092"
       }
       resources {
         limits = {
@@ -76,6 +85,14 @@ resource "google_cloud_run_v2_service_iam_binding" "default" {
     google_cloud_run_v2_service.default,
     google_project_organization_policy.allow_policy_member_domains
   ]
+}
+# Assigns the Storage Object Viewer role to the service account, allowing it to read objects in GCS buckets.
+resource "google_project_iam_member" "cloud_run_user_bq_permissions" {
+  for_each = toset(["roles/bigquery.dataEditor", "roles/bigquery.jobUser"])
+  project = var.project_id
+  role    = each.value
+
+  member = "serviceAccount:${google_cloud_run_v2_service.default.template[0].service_account}"
 }
 
 output "cloud_run_url" {
