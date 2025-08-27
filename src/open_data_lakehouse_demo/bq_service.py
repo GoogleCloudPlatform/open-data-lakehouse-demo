@@ -29,15 +29,18 @@ class BigQueryService():
 
         query = f"""
         SELECT
-            REGEXP_REPLACE(bus_ride_id, r'^(\d+)_(\d{4})-(\d{2})-(\d{2})_(\d{2})-(\d{2})-(\d{2})$', 
+            REGEXP_REPLACE(bus_ride_id, r'^(\\d+)_(\\d{4})-(\\d{2})-(\\d{2})_(\\d{2})-(\\d{2})-(\\d{2})$', 
             '\\\\1_2025-\\\\3-\\\\4_\\\\5-\\\\6-\\\\7') AS bus_ride_id,
             bus_line_id,
+            bus_line,
             bus_size,
             seating_capacity,
             standing_capacity,
             total_capacity,
             bus_stop_id,
             bus_stop_index,
+            num_of_bus_stops,
+            last_stop,
             TIMESTAMP_ADD(timestamp_at_stop, INTERVAL {(now-stop_timestamp).days} DAY) AS timestamp_at_stop,
             passengers_in_stop,
             passengers_alighting,

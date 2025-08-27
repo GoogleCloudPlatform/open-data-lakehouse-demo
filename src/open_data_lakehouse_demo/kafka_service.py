@@ -6,7 +6,7 @@ from kafka import KafkaProducer
 import json
 import time
 import logging
-from open_data_lakehouse_demo.utils import BigQueryService
+from open_data_lakehouse_demo.bq_service import BigQueryService
 
 producer = None
 
@@ -40,8 +40,9 @@ def continuous_message_producer(stop_event, bootstrap_servers, topic, interval_s
         
         # every once in a while, we will simulate sudden spike of passengers, just to make things interesting.
         sudden_spike = random.random() < 0.05
-        if sudden_spike:
+        if sudden_spike and not ride_data['last_stop']:
             logging.info("Simulating sudden spike of passengers")
+            # recalculating the data point, to accommodate new passengers in stop
             on_bus_before_stop = (ride_data["total_passengers"] +
                                   ride_data["passengers_alighting"] -
                                   ride_data["passengers_boarding"])

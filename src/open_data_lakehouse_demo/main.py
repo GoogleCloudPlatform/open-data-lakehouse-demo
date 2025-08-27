@@ -17,7 +17,7 @@ from flask import Flask, render_template, jsonify
 from flask_executor import Executor
 import threading # Used to manage the stop signal for the background task
 
-from open_data_lakehouse_demo.utils import BigQueryService
+from open_data_lakehouse_demo.bq_service import BigQueryService
 from open_data_lakehouse_demo.kafka_service import continuous_message_producer
 
 templates_dir = os.path.join(os.path.dirname(__file__), "templates")
