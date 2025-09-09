@@ -1,4 +1,5 @@
 import argparse
+import datetime
 
 from pyspark.sql import SparkSession
 from pyspark.sql.types import (
@@ -42,7 +43,8 @@ def update_state(new_values, prev_state):
             bus_line = value.bus_line
             total_passengers = value.total_passengers
             total_capacity = value.total_capacity
-    return (bus_line, total_passengers, total_capacity)
+            update_timestamp = datetime.datetime.now(datetime.UTC)
+    return bus_line, total_passengers, total_capacity, update_timestamp
 
 # Function to write a micro-batch to BigQuery
 def write_to_bigquery(df, epoch_id, table, gcs_bucket):
@@ -166,7 +168,8 @@ def run_pyspark(
     state_schema = StructType([
         StructField("bus_line", StringType()),
         StructField("total_passengers", IntegerType()),
-        StructField("total_capacity", IntegerType())
+        StructField("total_capacity", IntegerType()),
+        StructField("update_timestamp", TimestampType())
     ])
 
     spark.udf.register("stateful_function", update_state, state_schema)
@@ -191,7 +194,7 @@ def run_pyspark(
     # Use forEachBatch to write to BigQuery, as direct streaming is not supported.
     # The 'complete' output mode ensures each micro-batch contains the full state,
     # which we then use to overwrite the BigQuery table.
-    (stateful_df.writeStream \
+    (stateful_df.writeStream
         .queryName("write_latest_bus_data_to_bq")
         .outputMode("complete")
         .option("checkpointLocation", f"{spark_checkpoint_location}/stateful_bq")
@@ -202,7 +205,7 @@ def run_pyspark(
     spark.streams.awaitAnyTermination()
 
 
-if __name__ == "__main__":
+def pyspark_parse_args():
     parser = argparse.ArgumentParser(
         description="PySpark job to process bus updates from Kafka, generate alerts, and update bus state in BigQuery."
     )
@@ -245,8 +248,11 @@ if __name__ == "__main__":
         help="Fully qualified BigQuery table name (e.g., project.dataset.table) to write bus state to."
     )
 
-    args = parser.parse_args()
+    return parser.parse_args()
 
+
+if __name__ == "__main__":
+    args = pyspark_parse_args()
     run_pyspark(
         args.kafka_brokers, args.kafka_input_topic, args.kafka_alert_topic,
         args.spark_tmp_bucket, args.spark_checkpoint_location, args.bigquery_table

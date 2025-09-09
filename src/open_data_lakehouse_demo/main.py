@@ -23,11 +23,18 @@ from open_data_lakehouse_demo.pyspark_service import PySparkService
 
 templates_dir = os.path.join(os.path.dirname(__file__), "templates")
 
-BQ_DATASET = os.getenv("BQ_DATASET", "ridership_lakehouse")
+# Read environment variables
+BQ_DATASET = os.getenv("BQ_DATASET")
 PROJECT_ID = os.getenv("PROJECT_ID")
+GCS_MAIN_BUCKET = os.getenv("GCS_MAIN_BUCKET")
 REGION = os.getenv("REGION")
 KAFKA_BOOTSTRAP = os.getenv("KAFKA_BOOTSTRAP")
-
+KAFKA_TOPIC = os.getenv("KAFKA_TOPIC")
+KAFKA_ALERT_TOPIC = os.getenv("KAFKA_ALERT_TOPIC")
+SPARK_TMP_BUCKET = os.getenv("SPARK_TMP_BUCKET")
+SPARK_CHECKPOINT_LOCATION = os.getenv("SPARK_CHECKPOINT_LOCATION")
+BIGQUERY_TABLE = os.getenv("BIGQUERY_TABLE")
+SUBNET_URI = os.getenv("SUBNET_URI")
 app = Flask(__name__, template_folder=templates_dir)
 executor = Executor(app)
 
@@ -114,10 +121,21 @@ def ensure_spark() -> dict:
         return {"message": "Spark streaming is already running."}
         
     logging.info("Starting spark streaming app...")
-    spark_service = PySparkService()
+    spark_service = PySparkService(
+        PROJECT_ID, 
+        REGION, 
+        GCS_MAIN_BUCKET,
+        KAFKA_BOOTSTRAP,
+        KAFKA_TOPIC,
+        KAFKA_ALERT_TOPIC,
+        SPARK_TMP_BUCKET,
+        SPARK_CHECKPOINT_LOCATION,
+        BQ_DATASET,
+        BIGQUERY_TABLE,
+        SUBNET_URI
+    )
     app.config[SPARK_EVENT_KEY].clear()
-    app.config[SPARK_TASK_ID_KEY] = executor.submit(spark_service.start_pyspark, PROJECT_ID, REGION, KAFKA_BOOTSTRAP, 
-                                                    "bus-updates")
+    app.config[SPARK_TASK_ID_KEY] = executor.submit(spark_service.start_pyspark)
     return {"message": "Spark streaming started in the background."}
 
 def ensure_kafka() -> dict:

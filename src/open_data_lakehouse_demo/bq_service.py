@@ -21,7 +21,11 @@ class BigQueryService():
             FROM `{self.bq_dataset}.bus_lines`
         """
         return [x for x in self.client.query(query).result()]
-
+    
+    def get_bus_state(self, table_name: str):
+        query = f"SELECT * FROM {self.bq_dataset}.{table_name}"
+        return [dict(x) for x in self.client.query(query).result()]
+        
     def get_rides_data(self):
         now = datetime.datetime.now(datetime.UTC)
         start_timestamp = (now - datetime.timedelta(days=5)).replace(year=2024)
@@ -49,7 +53,7 @@ class BigQueryService():
             remaining_at_stop,
             total_passengers
         FROM
-            ridership_lakehouse.bus_rides
+            {self.bq_dataset}.bus_rides
         WHERE 
             timestamp_at_stop BETWEEN TIMESTAMP('{start_timestamp.strftime("%Y-%m-%dT%H:%M:%S")}')
                 AND TIMESTAMP('{stop_timestamp.strftime("%Y-%m-%dT%H:%M:%S")}')

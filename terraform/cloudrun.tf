@@ -51,6 +51,10 @@ resource "google_cloud_run_v2_service" "default" {
         value = var.project_id
       }
       env {
+        name  = "GCS_MAIN_BUCKET"
+        value = google_storage_bucket.data_lakehouse_bucket.name
+      }
+      env {
         name  = "REGION"
         value = var.region
       }
@@ -60,11 +64,11 @@ resource "google_cloud_run_v2_service" "default" {
       }
       env {
         name  = "KAFKA_TOPIC"
-        value = "bus-updates"
+        value = google_managed_kafka_topic.bus_updates.name
       }
       env {
         name  = "KAFKA_ALERT_TOPIC"
-        value = "capacity-alerts"
+        value = google_managed_kafka_topic.capacity_alerts.name
       }
       env {
         name  = "SPARK_TMP_BUCKET"
@@ -75,12 +79,12 @@ resource "google_cloud_run_v2_service" "default" {
         value = "gs://${google_storage_bucket.spark_bucket.name}/checkpoint"
       }
       env {
-        name  = "BIGQUERY_DATASET"
-        value = google_bigquery_dataset.ridership_lakehouse.dataset_id
-      }
-      env {
         name  = "BIGQUERY_TABLE"
         value = "bus_state"
+      }
+      env {
+        name  = "SUBNET_URI"
+        value = google_compute_subnetwork.open-lakehouse-subnetwork.id
       }
       resources {
         limits = {
