@@ -1,5 +1,25 @@
 version: "3"
 services:
+  spark-master:
+    image: bitnami/spark:3.5-debian-12
+    container_name: spark-master
+    environment:
+      - SPARK_MODE=master
+    ports:
+      - "8081:8080"
+      - "7077:7077"
+    networks:
+      - app-network
+
+  spark-worker-1:
+    image: bitnami/spark:3.5-debian-12
+    container_name: spark-worker-1
+    environment:
+      - SPARK_MODE=worker
+      - SPARK_MASTER_URL=spark://spark-master:7077
+    networks:
+      - app-network
+
   zookeeper:
     image: confluentinc/cp-zookeeper:7.6.1
     hostname: zookeeper
@@ -8,6 +28,8 @@ services:
     environment:
       ZOOKEEPER_CLIENT_PORT: 2181
       ZOOKEEPER_TICK_TIME: 2000
+    networks:
+      - app-network
 
   kafka:
     image: confluentinc/cp-kafka:7.6.1
@@ -26,6 +48,8 @@ services:
       KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
       KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+    networks:
+      - app-network
 
   kafka-ui:
     image: provectuslabs/kafka-ui:latest
@@ -37,3 +61,9 @@ services:
     environment:
       KAFKA_CLUSTERS_0_NAME: local-kafka-cluster
       KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9092
+    networks:
+      - app-network
+
+networks:
+  app-network:
+    driver: bridge

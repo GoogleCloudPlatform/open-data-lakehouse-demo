@@ -68,9 +68,18 @@
             }).fail(function(data) {
                 console.log("Simulation started - fail", data);
             })
-
         });
-        
+
+        $("button#stop-simulation").on("click", function(event) {
+            $.post("{{ url_for('stop_simulation') }}", function(data) {
+                console.log("Simulation stopped", data);
+            }).done(function(data) {
+                console.log("Simulation stopped - done", data);
+            }).fail(function(data) {
+                console.log("Simulation stopped - fail", data);
+            })
+        });
+
         let refreshIntervalHandler = setInterval(checkForUpdates, 1000);
     });
     function checkForUpdates() {

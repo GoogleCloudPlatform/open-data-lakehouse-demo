@@ -16,7 +16,7 @@
 name = "open-data-lakehouse-demo"
 version = "0.1.0"
 description = "This webapp will walk through some setup and guidelines on building your own data lakehouse, based on open source technologies to enable multi-platform data lakehouse architecture"
-requires-python = ">=3.12"
+requires-python = ">=3.11"
 dependencies = [
     "flask>=3.1.1",
     "google-cloud-aiplatform>=1.94.0",
@@ -32,11 +32,14 @@ dependencies = [
     "ruff>=0.11.13",
     "jupyterlab>=4.4.3",
     "pyiceberg[gcsfs]>=0.9.1",
-    "kafka-python>=2.2.15",
     "flask-executor>=1.0.0",
     "google-cloud-logging>=3.12.1",
     "dataproc-spark-connect>=0.9.0",
     "google-cloud-dataproc>=5.21.0",
+    "confluent-kafka>=2.11.1",
+    "google-auth>=2.40.2",
+    "urllib3>=2.4.0",
+    "packaging>=24.2",
 ]
 
 [build-system]

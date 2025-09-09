@@ -43,7 +43,32 @@ resource "google_compute_firewall" "allow_internal_ingress" {
   }
 
   source_ranges = [local.cidr]
-  destination_ranges = [local.cidr]
+  # destination_ranges = [local.cidr]
   direction = "INGRESS"
   priority  = 1000
+}
+
+// setup nat router, as our spark job might need to access maven
+resource "google_compute_router" "nat-router" {
+  name    = "nat-router"
+  project = var.project_id
+  region  = "${var.region}"
+  network = google_compute_network.open-lakehouse-network.id
+
+  depends_on = [
+    google_compute_firewall.allow_internal_ingress
+  ]
+}
+
+resource "google_compute_router_nat" "nat-config" {
+  name                               = "nat-config"
+  project                            = var.project_id
+  router                             = "${google_compute_router.nat-router.name}"
+  region                             = "${var.region}"
+  nat_ip_allocate_option             = "AUTO_ONLY"
+  source_subnetwork_ip_ranges_to_nat = "ALL_SUBNETWORKS_ALL_IP_RANGES"
+
+  depends_on = [
+    google_compute_router.nat-router
+  ]
 }

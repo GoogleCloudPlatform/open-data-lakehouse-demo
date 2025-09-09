@@ -1,0 +1,11 @@
+<ivysettings>
+    <settings defaultResolver="chain"/>
+    <resolvers>
+        <chain name="chain">
+            <ibiblio name="gcs" m2compatible="true"
+                     root="https://maven-central.storage-download.googleapis.com/maven2/"/>
+            <ibiblio name="central" m2compatible="true" root="https://repo1.maven.org/maven2/"/>
+            <ibiblio name="confluent" m2compatible="true" root="https://packages.confluent.io/maven"/>
+        </chain>
+    </resolvers>
+</ivysettings>

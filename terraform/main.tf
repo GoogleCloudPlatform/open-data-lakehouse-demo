@@ -30,6 +30,8 @@ module "project_services" {
     "dataform.googleapis.com",
     "bigqueryconnection.googleapis.com",
     "bigquerystorage.googleapis.com",
+
+    "vpcaccess.googleapis.com",
   ]
 
   # Provide more access to the cloudbuild service account

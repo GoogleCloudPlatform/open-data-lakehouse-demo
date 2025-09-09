@@ -31,6 +31,37 @@ resource "google_storage_bucket" "data_lakehouse_bucket" {
   }
 }
 
+resource "google_storage_bucket" "spark_bucket" {
+  name          = "${var.project_id}-dataproc-serverless"
+  location      = var.region
+  force_destroy = true
+  project       = var.project_id
+
+  uniform_bucket_level_access = true
+
+  lifecycle_rule {
+    action {
+      type = "Delete"
+    }
+    condition {
+      age = 365
+    }
+  }
+}
+
+resource "google_storage_bucket_object" "code_assets" {
+  for_each = fileset("${path.module}/../notebooks_and_code", "**")
+  bucket = google_storage_bucket.data_lakehouse_bucket.name
+  name   = "notebooks_and_code/${each.value}"
+  source = "${path.module}/../notebooks_and_code/${each.value}"
+  source_md5hash = filemd5("${path.module}/../notebooks_and_code/${each.value}")
+}
+
+
 output "gcs_bucket" {
   value = google_storage_bucket.data_lakehouse_bucket.name
+}
+
+output "spark_bucket" {
+  value = google_storage_bucket.spark_bucket.name
 }

@@ -30,8 +30,14 @@ resource "google_cloud_run_v2_service" "default" {
   deletion_protection = false # set to "true" in production
 
   template {
-
+    vpc_access {
+      network_interfaces {
+        network    = google_compute_network.open-lakehouse-network.id
+        subnetwork = google_compute_subnetwork.open-lakehouse-subnetwork.id
+      }
+    }
     containers {
+
       image = "${var.region}-docker.pkg.dev/${var.project_id}/${google_artifact_registry_repository.docker_repo.repository_id}/${local.image_name}:latest"
       ports {
         container_port = 8080
@@ -41,8 +47,40 @@ resource "google_cloud_run_v2_service" "default" {
         value = google_bigquery_dataset.ridership_lakehouse.dataset_id
       }
       env {
+        name  = "PROJECT_ID"
+        value = var.project_id
+      }
+      env {
+        name  = "REGION"
+        value = var.region
+      }
+      env {
         name  = "KAFKA_BOOTSTRAP"
         value = "bootstrap.${google_managed_kafka_cluster.default.cluster_id}.${google_managed_kafka_cluster.default.location}.managedkafka.${var.project_id}.cloud.goog:9092"
+      }
+      env {
+        name  = "KAFKA_TOPIC"
+        value = "bus-updates"
+      }
+      env {
+        name  = "KAFKA_ALERT_TOPIC"
+        value = "capacity-alerts"
+      }
+      env {
+        name  = "SPARK_TMP_BUCKET"
+        value = google_storage_bucket.spark_bucket.name
+      }
+      env {
+        name  = "SPARK_CHECKPOINT_LOCATION"
+        value = "gs://${google_storage_bucket.spark_bucket.name}/checkpoint"
+      }
+      env {
+        name  = "BIGQUERY_DATASET"
+        value = google_bigquery_dataset.ridership_lakehouse.dataset_id
+      }
+      env {
+        name  = "BIGQUERY_TABLE"
+        value = "bus_state"
       }
       resources {
         limits = {
@@ -93,6 +131,13 @@ resource "google_project_iam_member" "cloud_run_user_bq_permissions" {
   role    = each.value
 
   member = "serviceAccount:${google_cloud_run_v2_service.default.template[0].service_account}"
+}
+
+resource "google_project_iam_member" "cloud_run_user_dataproc_permissions" {
+  for_each = toset(["roles/dataproc.editor"])
+  project = var.project_id
+  role    = each.value
+  member  = "serviceAccount:${google_cloud_run_v2_service.default.template[0].service_account}"
 }
 
 output "cloud_run_url" {
