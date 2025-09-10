@@ -1,4 +1,6 @@
+from __future__ import annotations
 import logging
+from dataclasses import dataclass
 
 from google.api_core import exceptions
 from google.cloud import dataproc_v1 as dataproc
@@ -36,9 +38,15 @@ class PySparkService:
         self.client = dataproc.BatchControllerClient(client_options={
             "api_endpoint": f"{region}-dataproc.googleapis.com:443"
         })
-        self.batch_id = "pyspark-streaming-job"
         self.bq_service = BigQueryService(bigquery_dataset)
 
+    @property
+    def batch_id(self) -> str:
+        return "pyspark-streaming-job"
+
+    @property
+    def full_batch_id(self) -> str:
+        return f"projects/{self.project_id}/locations/{self.region}/batches/{self.batch_id}"
 
     
     def start_pyspark(self):
@@ -97,43 +105,93 @@ class PySparkService:
 
     def cancel_job(self):
         try:
-            get_operation = self.client.get_batch(request={
-                "name": f"projects/{self.project_id}/locations/{self.region}/batches/{self.batch_id}"}
-            )
+            get_batch_operation = self.client.get_batch(request={
+                "name": self.full_batch_id,
+            })
         except exceptions.NotFound:
+            logging.warning("Batch Job not found or not started.")
             return {"status": "NOT_FOUND", "message": "Batch Job not found or not started."}
         except Exception as e:
             logging.exception(e)
             return {"status": "ERROR", "message": str(e)}
-        
+        logging.info("Found existing job. Getting the operation attached")
         try:
-            self.client.cancel_operation(request={"name": get_operation.operation}
-        except Exception as e:
-            return {"status": "ERROR", "message": str(e)}
-        
-        return {"status": "CANCELLED", "message": "Job cancelled."}
-
-    def get_job_status(self):
-        try:
-            operation = self.client.get_batch(request={
-                "name": f"projects/{self.project_id}/locations/{self.region}/batches/{self.batch_id}"}
-            )
-        except exceptions.NotFound:
-            return {"status": "NOT_FOUND", "message": "Job not found or not started."}
+            batch_operation = self.client.get_operation(request={"name": get_batch_operation.operation})
         except Exception as e:
             logging.exception(e)
             return {"status": "ERROR", "message": str(e)}
+        logging.info("Found existing operation. Canceling the job")
+        try:
+            self.client.cancel_batch(request={"name": batch_operation.name})
+        except Exception as e:
+            logging.exception(e)
+            return {"status": "ERROR", "message": str(e)}
+        logging.info("Cancelled existing operation. Deleting the batch job")
+        try:
+            self.client.delete_batch(request={"name": self.full_batch_id})
+        except Exception as e:
+            logging.exception(e)
+            return {"status": "ERROR", "message": str(e)}
+        return {"status": "CANCELLED", "message": "Job cancelled and deleted."}
+
+    def get_job_status(self) -> JobStatus:
+        try:
+            operation = self.client.get_batch(request={
+                "name": self.full_batch_id
+            })
+        except exceptions.NotFound:
+            return JobStatus(status=dataproc.Batch.State.CANCELLED, message="Job not found or not started.", is_running=False)
+        except Exception as e:
+            logging.exception(e)
+            return JobStatus(status=dataproc.Batch.State.ERROR, message=str(e), is_running=False)
         match operation.state:
             case dataproc.Batch.State.STATE_UNSPECIFIED:
-                return {"status": "STATE_UNSPECIFIED", "message": "Unknown state - check job manually"}
+                return JobStatus(
+                    status=dataproc.Batch.State.STATE_UNSPECIFIED,
+                    message="Unknown state - check job manually",
+                    is_running=False
+                )
             case dataproc.Batch.State.FAILED:
-                return {"status": "FAILED", "message": f"Job failed. Error: {operation.state_message}"}
+                return JobStatus(
+                    status=dataproc.Batch.State.FAILED,
+                    message=f"Job failed. Error: {operation.state_message}",
+                    is_running=False
+                )
             case dataproc.Batch.State.CANCELLED:
-                return {"status": "CANCELLED", "message": "Job cancelled."}
+                return JobStatus(
+                    status=dataproc.Batch.State.CANCELLED,
+                    message="Job cancelled",
+                    is_running=False
+                )
             case dataproc.Batch.State.PENDING:
-                return {"status": "PENDING", "message": "Job is pending."}
+                return JobStatus(
+                    status=dataproc.Batch.State.PENDING,
+                    message="Job is pending",
+                    is_running=True
+                )
             case dataproc.Batch.State.RUNNING:
-                return {"status": "RUNNING", "message": "Job is running."}
+                return JobStatus(
+                    status=dataproc.Batch.State.RUNNING,
+                    message="Job is running",
+                    is_running=True
+                )
             case dataproc.Batch.State.SUCCEEDED:
-                return {"status": "SUCCEEDED", "message": "Job succeeded."}
+                return JobStatus(
+                    status=dataproc.Batch.State.SUCCEEDED,
+                    message="Job succeeded",
+                    is_running=False
+                )
 
+@dataclass
+class JobStatus:
+    status: dataproc.Batch.State
+    message: str
+    is_running: bool
+    
+    def to_dict(self):
+        return {
+            "status": str(self.status.name),
+            "message": self.message,
+            "is_running": self.is_running
+        }
+    

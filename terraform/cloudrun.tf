@@ -64,11 +64,11 @@ resource "google_cloud_run_v2_service" "default" {
       }
       env {
         name  = "KAFKA_TOPIC"
-        value = google_managed_kafka_topic.bus_updates.name
+        value = google_managed_kafka_topic.bus_updates.topic_id
       }
       env {
         name  = "KAFKA_ALERT_TOPIC"
-        value = google_managed_kafka_topic.capacity_alerts.name
+        value = google_managed_kafka_topic.capacity_alerts.topic_id
       }
       env {
         name  = "SPARK_TMP_BUCKET"

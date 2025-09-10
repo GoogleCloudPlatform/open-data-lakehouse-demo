@@ -13,9 +13,10 @@
 # limitations under the License.
 import logging
 import os
+import threading  # Used to manage the stop signal for the background task
+
 from flask import Flask, render_template, jsonify
 from flask_executor import Executor
-import threading # Used to manage the stop signal for the background task
 
 from open_data_lakehouse_demo.bq_service import BigQueryService
 from open_data_lakehouse_demo.kafka_service import KafkaService
@@ -24,17 +25,17 @@ from open_data_lakehouse_demo.pyspark_service import PySparkService
 templates_dir = os.path.join(os.path.dirname(__file__), "templates")
 
 # Read environment variables
-BQ_DATASET = os.getenv("BQ_DATASET")
-PROJECT_ID = os.getenv("PROJECT_ID")
-GCS_MAIN_BUCKET = os.getenv("GCS_MAIN_BUCKET")
-REGION = os.getenv("REGION")
-KAFKA_BOOTSTRAP = os.getenv("KAFKA_BOOTSTRAP")
-KAFKA_TOPIC = os.getenv("KAFKA_TOPIC")
-KAFKA_ALERT_TOPIC = os.getenv("KAFKA_ALERT_TOPIC")
-SPARK_TMP_BUCKET = os.getenv("SPARK_TMP_BUCKET")
-SPARK_CHECKPOINT_LOCATION = os.getenv("SPARK_CHECKPOINT_LOCATION")
-BIGQUERY_TABLE = os.getenv("BIGQUERY_TABLE")
-SUBNET_URI = os.getenv("SUBNET_URI")
+BQ_DATASET = os.environ["BQ_DATASET"]
+PROJECT_ID = os.environ["PROJECT_ID"]
+GCS_MAIN_BUCKET = os.environ["GCS_MAIN_BUCKET"]
+REGION = os.environ["REGION"]
+KAFKA_BOOTSTRAP = os.environ["KAFKA_BOOTSTRAP"]
+KAFKA_TOPIC = os.environ["KAFKA_TOPIC"]
+KAFKA_ALERT_TOPIC = os.environ["KAFKA_ALERT_TOPIC"]
+SPARK_TMP_BUCKET = os.environ["SPARK_TMP_BUCKET"]
+SPARK_CHECKPOINT_LOCATION = os.environ["SPARK_CHECKPOINT_LOCATION"]
+BIGQUERY_TABLE = os.environ["BIGQUERY_TABLE"]
+SUBNET_URI = os.environ["SUBNET_URI"]
 app = Flask(__name__, template_folder=templates_dir)
 executor = Executor(app)
 
@@ -42,15 +43,23 @@ app.config["bq_client"] = BigQueryService(BQ_DATASET)
 
 KAFKA_EVENT_KEY = "kafka_event"
 KAFKA_TASK_ID_KEY = "kafka_task_id"
-SPARK_EVENT_KEY = "spark_event"
-SPARK_TASK_ID_KEY = "spark_task_id"
 
 app.config[KAFKA_EVENT_KEY] = threading.Event()
 app.config[KAFKA_TASK_ID_KEY] = None
 
-app.config[SPARK_EVENT_KEY] = threading.Event()
-app.config[SPARK_TASK_ID_KEY] = None
-
+spark_service = PySparkService(
+    PROJECT_ID,
+    REGION,
+    GCS_MAIN_BUCKET,
+    KAFKA_BOOTSTRAP,
+    KAFKA_TOPIC,
+    KAFKA_ALERT_TOPIC,
+    SPARK_TMP_BUCKET,
+    SPARK_CHECKPOINT_LOCATION,
+    BQ_DATASET,
+    BIGQUERY_TABLE,
+    SUBNET_URI
+)
 
 def get_kafka_status():
     kafka_service = KafkaService()
@@ -82,61 +91,25 @@ def get_kafka_status():
     return {"status": "unknown", "message": "Could not determine job status."}
 
 def get_spark_status():
-    spark_service = PySparkService()
-    if not app.config[SPARK_TASK_ID_KEY]:
-         return {"status": "inactive", "message": "No job has been submitted."}
-    
-    if app.config[SPARK_TASK_ID_KEY].running():
-        if spark_service.get_stats_query() and spark_service.get_stats_query().isActive:
-            return {
-                "status": "active",
-                "message": "Spark job is running and stream is active.",
-                "query_status": spark_service.get_stats_query().status,
-                "stats": spark_service.get_stats()
-            }
-        else:
-            return {
-                "status": "initializing",
-                "message": "Spark job is running, but stream is not active yet."
-            }
+    global spark_service
+    status = spark_service.get_job_status()
+    if status.is_running:
+        return {
+            **status.to_dict(),
+            "stats": spark_service.get_stats()
+        }
+    else:
+        return status.to_dict()
 
-    if app.config[SPARK_TASK_ID_KEY].done():
-        try:
-            result = app.config[SPARK_TASK_ID_KEY].result()
-            return {
-                "status": "finished",
-                "message": "Spark job has completed.",
-                "result": str(result)
-                }
-        except Exception as e:
-             return {
-                "status": "error",
-                "message": f"Spark job failed with an exception: {e}"
-            }
-        
-    return {"status": "unknown", "message": "Could not determine job status."}
 
 def ensure_spark() -> dict:
-    if app.config[SPARK_TASK_ID_KEY] is not None and not executor.futures.done(app.config[SPARK_TASK_ID_KEY]):
+    global spark_service
+    spark_status = spark_service.get_job_status()
+    if spark_status.is_running:
         return {"message": "Spark streaming is already running."}
-        
     logging.info("Starting spark streaming app...")
-    spark_service = PySparkService(
-        PROJECT_ID, 
-        REGION, 
-        GCS_MAIN_BUCKET,
-        KAFKA_BOOTSTRAP,
-        KAFKA_TOPIC,
-        KAFKA_ALERT_TOPIC,
-        SPARK_TMP_BUCKET,
-        SPARK_CHECKPOINT_LOCATION,
-        BQ_DATASET,
-        BIGQUERY_TABLE,
-        SUBNET_URI
-    )
-    app.config[SPARK_EVENT_KEY].clear()
-    app.config[SPARK_TASK_ID_KEY] = executor.submit(spark_service.start_pyspark)
-    return {"message": "Spark streaming started in the background."}
+    spark_status = spark_service.start_pyspark()
+    return spark_status
 
 def ensure_kafka() -> dict:
     if app.config[KAFKA_TASK_ID_KEY] is not None and not executor.futures.done(app.config[KAFKA_TASK_ID_KEY]):
@@ -153,13 +126,16 @@ def ensure_kafka() -> dict:
     return {"message": "Kafka producer started in the background."}
 
 def stop_spark():
-    app.config[SPARK_EVENT_KEY].set()
-    app.config[SPARK_TASK_ID_KEY].cancel()
-    app.config[SPARK_TASK_ID_KEY] = None
+    global spark_service
+    stop_status = spark_service.cancel_job()
+    return stop_status
+
 
 def stop_kafka():
-    app.config[KAFKA_EVENT_KEY].set()
-    app.config[KAFKA_TASK_ID_KEY].cancel()
+    if app.config[KAFKA_EVENT_KEY]:
+        app.config[KAFKA_EVENT_KEY].set()
+    if app.config[KAFKA_TASK_ID_KEY]:
+        app.config[KAFKA_TASK_ID_KEY].cancel()
     app.config[KAFKA_TASK_ID_KEY] = None
 
 
@@ -178,9 +154,9 @@ def start_simulation():
 
 @app.route("/stop_simulation", methods=["POST"])
 def stop_simulation():
-    stop_spark()
+    stop_op = stop_spark()
     stop_kafka()
-    return jsonify({"message": "Simulation stopped."})
+    return jsonify({"kafka_status": "Simulation stopped.", "spark_status": stop_op})
 
 
 @app.route("/")

@@ -1,6 +1,7 @@
 import argparse
 import datetime
 
+import pyspark.sql.functions as f
 from pyspark.sql import SparkSession
 from pyspark.sql.types import (
     StructType,
@@ -11,7 +12,6 @@ from pyspark.sql.types import (
     BooleanType,
     StructField,
 )
-import pyspark.sql.functions as f
 
 """
 Run this job using 
@@ -19,7 +19,13 @@ Run this job using
 gcloud dataproc batches submit pyspark gs://<PROJECT_ID>>-ridership-lakehouse/notebooks_and_code/pyspark-job.py 
 --region=<REGION>> --subnet=projects/<PROJECT_ID>/regions/<REGION>/subnetworks/<REGION>-open-lakehouse-subnet 
 --version=2.3 --files="gs://<PROJECT_ID>-ridership-lakehouse/notebooks_and_code/ivySettings.xml" 
---properties=^$^'spark.jars.ivySettings=./ivySettings.xml$spark.jars.packages=org.apache.spark:spark-streaming-kafka-0-10_2.13:3.5.1,org.apache.spark:spark-sql-kafka-0-10_2.13:3.5.1,com.google.cloud.hosted.kafka:managed-kafka-auth-login-handler:1.0.5'
+--properties=^$^'spark.jars.ivySettings=./ivySettings.xml$spark.jars.packages=org.apache.spark:spark-streaming-kafka
+-0-10_2.13:3.5.1,org.apache.spark:spark-sql-kafka-0-10_2.13:3.5.1,
+com.google.cloud.hosted.kafka:managed-kafka-auth-login-handler:1.0.5' -- 
+--kafka-brokers=bootstrap.kafka-cluster.<REGION>.managedkafka.<PROJECT_ID>.cloud.goog:9092 
+--kafka-input-topic=bus-updates --kafka-alert-topic=capacity-alerts --spark-tmp-bucket=<PROJECT_ID>-dataproc-serverless 
+--spark-checkpoint-location=gs://<PROJECT_ID>-dataproc-serverless/checkpoint 
+--bigquery-table=ridership_lakehouse.bus_state
 ```
 """
 
@@ -33,7 +39,7 @@ def update_state(new_values, prev_state):
     # The `prev_state` argument is the grouping key `bus_line_id`, an integer.
     # The original code tried to access it as a list, causing a TypeError.
     # This function now correctly processes the `new_values` to determine the state.
-
+    update_timestamp = datetime.datetime.now(datetime.UTC)
     for value in new_values:
         if value.last_stop:
             # Remove the bus_ride_id by returning None
@@ -43,7 +49,6 @@ def update_state(new_values, prev_state):
             bus_line = value.bus_line
             total_passengers = value.total_passengers
             total_capacity = value.total_capacity
-            update_timestamp = datetime.datetime.now(datetime.UTC)
     return bus_line, total_passengers, total_capacity, update_timestamp
 
 # Function to write a micro-batch to BigQuery
@@ -188,6 +193,7 @@ def run_pyspark(
         .withColumn("bus_line", f.col("state.bus_line")) \
         .withColumn("total_passengers", f.col("state.total_passengers")) \
         .withColumn("total_capacity", f.col("state.total_capacity")) \
+        .withColumn("update_timestamp", f.col("state.update_timestamp")) \
         .drop("updates", "state")
     print("stateful_df schema")
     stateful_df.printSchema()
@@ -253,6 +259,7 @@ def pyspark_parse_args():
 
 if __name__ == "__main__":
     args = pyspark_parse_args()
+    print(f"Running with args: {args}")
     run_pyspark(
         args.kafka_brokers, args.kafka_input_topic, args.kafka_alert_topic,
         args.spark_tmp_bucket, args.spark_checkpoint_location, args.bigquery_table
