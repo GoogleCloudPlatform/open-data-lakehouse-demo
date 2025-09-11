@@ -30,6 +30,7 @@ venv/
 ENV/
 env.bak/
 venv.bak/
+node_modules/
 
 # Local image assets for dev/test
 .assets/
