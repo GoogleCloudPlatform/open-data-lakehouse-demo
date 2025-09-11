@@ -101,8 +101,15 @@ def get_spark_status():
     else:
         return status.to_dict()
 
+@app.route("/check-for-updates", methods=["GET"])
+def check_for_updates():
+    return jsonify({
+        "spark": get_spark_status(),
+        "kafka": get_kafka_status(),
+    })
 
-def ensure_spark() -> dict:
+@app.route("/start-spark-simulation", methods=["POST"])
+def start_spark_simulation():
     global spark_service
     spark_status = spark_service.get_job_status()
     if spark_status.is_running:
@@ -111,53 +118,35 @@ def ensure_spark() -> dict:
     spark_status = spark_service.start_pyspark()
     return spark_status
 
-def ensure_kafka() -> dict:
+@app.route("/start-kafka-simulation", methods=["POST"])
+def start_kafka_simulation():
     if app.config[KAFKA_TASK_ID_KEY] is not None and not executor.futures.done(app.config[KAFKA_TASK_ID_KEY]):
-        return {"message": "Producer is already running."}
-    
+        return jsonify({"message": "Producer is already running."})
+
     logging.info("Starting kafka producer...")
     # Reset the stop event and submit the continuous producer task
     app.config[KAFKA_EVENT_KEY].clear()
     kafka_service = KafkaService()
     app.config[KAFKA_TASK_ID_KEY] = executor.submit(
-        kafka_service.continuous_message_producer,
+        kafka_service.start_kafka_messages_stream,
         app.config[KAFKA_EVENT_KEY],
         KAFKA_BOOTSTRAP, "bus-updates")
-    return {"message": "Kafka producer started in the background."}
+    return jsonify({"message": "Kafka producer started in the background."})
 
-def stop_spark():
+@app.route("/stop-spark-simulation", methods=["POST"])
+def stop_spark_simulation():
     global spark_service
     stop_status = spark_service.cancel_job()
-    return stop_status
+    return jsonify(stop_status)
 
-
-def stop_kafka():
+@app.route("/stop-kafka-simulation", methods=["POST"])
+def stop_kafka_simulation():
     if app.config[KAFKA_EVENT_KEY]:
         app.config[KAFKA_EVENT_KEY].set()
     if app.config[KAFKA_TASK_ID_KEY]:
         app.config[KAFKA_TASK_ID_KEY].cancel()
     app.config[KAFKA_TASK_ID_KEY] = None
-
-
-@app.route("/check-for-updates", methods=["GET"])
-def check_for_updates():
-    return jsonify({
-        "spark": get_spark_status(),
-        "kafka": get_kafka_status(),
-    })
-
-@app.route("/start_simulation", methods=["POST"])
-def start_simulation():
-    spark_status = ensure_spark()
-    kafka_status = ensure_kafka()
-    return jsonify({"kafka": kafka_status, "spark": spark_status})
-
-@app.route("/stop_simulation", methods=["POST"])
-def stop_simulation():
-    stop_op = stop_spark()
-    stop_kafka()
-    return jsonify({"kafka_status": "Simulation stopped.", "spark_status": stop_op})
-
+    return jsonify({"message": "Kafka producer stopped."})
 
 @app.route("/")
 @app.route("/index")

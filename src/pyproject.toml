@@ -34,7 +34,6 @@ dependencies = [
     "pyiceberg[gcsfs]>=0.9.1",
     "flask-executor>=1.0.0",
     "google-cloud-logging>=3.12.1",
-    "dataproc-spark-connect>=0.9.0",
     "google-cloud-dataproc>=5.21.0",
     "confluent-kafka>=2.11.1",
     "google-auth>=2.40.2",

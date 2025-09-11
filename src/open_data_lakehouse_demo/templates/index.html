@@ -5,88 +5,134 @@
 {% block content %}
 <header class="mb-8 border-b border-gray-700 pb-4">
     <h1 class="text-4xl font-bold text-yellow-400">Real-Time bus capacity monitoring</h1>
-    <p class="text-gray-400">
-        In this page, we can view all bus lines that are working in our city. The table below displays the buses, and we can start and stop the simulation of the buses trips.
-    </p>
-    <p class="text-gray-400">
-        When you click the "Start Simulation" button, we will start producing Kafka messages to the `bus-updates` topic, where each message will indicate a bus coming to a stop. In the interest of time, we will speed the simulation so you can see changes in faster speeds.
-    </p>
-    <p class="text-gray-400">
-        In order to consume and analyze the messages, we will also need to press the "Start Processing" button, that will launch a spark-streaming application. This application will consume the kafka messages, and send out some statistics to the front end. When we detect a bus is overfilled, the spark streaming application will also send a kafka message to the `capacity-alerts` topic.
-    </p>
-    <p class="text-gray-400">
-        In the frontend, when a message comes in to the `capacity-alerts`, we will indicate it visually on the table below.
-    </p>
-    <p class="text-gray-200 font-bold">
-        Don't forget to turn off the simulation when done, to avoid unnecessary costs!
-    </p>
-</header>
-    <div class="mb-8 flex flex-wrap gap-4">
-        <button class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg shadow-md transition-transform transform hover:scale-105" id="start-simulation">
-            ▶️ Start Buses Simulation
-        </button>
-        <button class="bg-red-600 hover:bg-red-900 text-white font-bold py-2 px-4 rounded-lg shadow-md transition-transform transform hover:scale-105" id="stop-simulation">
-            ⏹️ Abort Buses Simulations
-        </button>
+    <div class="text-gray-300 text-xl">
+        <p>
+            In this page, we can view all bus lines that are working in our city. The table below displays the buses,
+            and we
+            can start and stop the simulation of the buses trips.
+        </p>
+        <p>
+            When you click the "Start Simulation" button, we will start producing Kafka messages to the `bus-updates`
+            topic,
+            where each message will indicate a bus coming to a stop. In the interest of time, we will speed the
+            simulation
+            so you can see changes in faster speeds.
+        </p>
+        <p>
+            In order to consume and analyze the messages, we will also need to press the "Start Processing" button, that
+            will launch a spark-streaming application. This application will consume the kafka messages, and send out
+            some
+            statistics to the front end. When we detect a bus is overfilled, the spark streaming application will also
+            send
+            a kafka message to the `capacity-alerts` topic.
+        </p>
+        <p>
+            In the frontend, when a message comes in to the `capacity-alerts`, we will indicate it visually on the table
+            below.
+        </p>
+        <p class="text-gray-200 font-bold">
+            Don't forget to turn off the simulation when done, to avoid unnecessary costs!
+        </p>
     </div>
-    <div class="bg-gray-800 shadow-2xl rounded-lg overflow-hidden">
-            <div class="overflow-x-auto">
-                <table class="min-w-full">
-                    <thead class="bg-gray-700">
-                        <tr>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Bus Line (ID)</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Number of Stops</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Frequency (Minutes)</th>
-                        </tr>
-                    </thead>
-                    <tbody class="divide-y divide-gray-700">
-                        {% for bus_line in bus_lines %}
-                        <tr class="hover:bg-gray-700/50 transition-colors duration-200">
-                            <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-100">{{ bus_line.bus_line }} ({{ bus_line.bus_line_id }})</td>
-                            <td class="px-6 py-4 whitespace-nowrap text-sm">
+</header>
+<div class="mb-8 flex flex-wrap gap-4">
+
+    <button class="bg-blue-600 hover:bg-blue-900 text-white font-bold py-2 px-4 rounded-lg shadow-md transition-all duration-300 ease-in-out transform hover:scale-105 cursor-pointer"
+            id="start-spark-simulation">
+        ▶️ Start Spark Buses Processing
+    </button>
+    <button class="bg-red-600 hover:bg-red-900 text-white font-bold py-2 px-4 rounded-lg shadow-md transition-all duration-300 ease-in-out transform hover:scale-105 cursor-pointer"
+            id="stop-spark-simulation">
+        ⏹️ Abort Spark Buses Processing
+    </button>
+
+    <div class="flex items-center space-x-2">
+        <div id="processing-status-icon" class="w-4 h-4 rounded-full bg-gray-500"></div>
+        <span id="processing-status-message" class="text-gray-400">Processing: Not Running</span>
+    </div>
+</div>
+<div class="mb-8 flex flex-wrap gap-4">
+    <button class="bg-blue-600 hover:bg-blue-900 text-white font-bold py-2 px-4 rounded-lg shadow-md transition-all duration-300 ease-in-out transform hover:scale-105 cursor-pointer"
+            id="start-simulation">
+        ▶️ Start Kafka Buses Simulation
+    </button>
+    <button class="bg-red-600 hover:bg-red-900 text-white font-bold py-2 px-4 rounded-lg shadow-md transition-all duration-300 ease-in-out transform hover:scale-105 cursor-pointer"
+            id="stop-simulation">
+        ⏹️ Abort Kafka Buses Simulations
+    </button>
+
+    <div class="flex items-center space-x-2">
+        <div id="simulation-status-icon" class="w-4 h-4 rounded-full bg-gray-500"></div>
+        <span id="simulation-status-message" class="text-gray-400">Simulation: Not Running</span>
+    </div>
+
+</div>
+<div class="bg-gray-800 shadow-2xl rounded-lg overflow-hidden">
+    <div class="overflow-x-auto">
+        <table class="min-w-full">
+            <thead class="bg-gray-700">
+            <tr>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Bus Line
+                    (ID)
+                </th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Number of
+                    Stops
+                </th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Frequency
+                    (Minutes)
+                </th>
+            </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-700">
+            {% for bus_line in bus_lines %}
+            <tr class="hover:bg-gray-700/50 transition-colors duration-200">
+                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-100">{{ bus_line.bus_line }} ({{
+                    bus_line.bus_line_id }})
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm">
                                 <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-gray-600 text-gray-100">
                                     {{ bus_line.number_of_stops }}
                                 </span>
-                            </td>
-                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-400">
-                                {{ bus_line.frequency_minutes }}
-                            </td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
-        </div>
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-400">
+                    {{ bus_line.frequency_minutes }}
+                </td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
     </div>
+</div>
 <script type="application/javascript">
-    $(document).ready(function() {
-        $("button#start-simulation").on("click", function(event) {
-            $.post("{{ url_for('start_simulation') }}", function(data) {
+    $(document).ready(function () {
+        $("button#start-simulation").on("click", function (event) {
+            $.post("{{ url_for('start_simulation') }}", function (data) {
                 console.log("Simulation started", data);
-            }).done(function(data) {
+            }).done(function (data) {
                 console.log("Simulation started - done", data);
-            }).fail(function(data) {
+            }).fail(function (data) {
                 console.log("Simulation started - fail", data);
             })
         });
 
-        $("button#stop-simulation").on("click", function(event) {
-            $.post("{{ url_for('stop_simulation') }}", function(data) {
+        $("button#stop-simulation").on("click", function (event) {
+            $.post("{{ url_for('stop_simulation') }}", function (data) {
                 console.log("Simulation stopped", data);
-            }).done(function(data) {
+            }).done(function (data) {
                 console.log("Simulation stopped - done", data);
-            }).fail(function(data) {
+            }).fail(function (data) {
                 console.log("Simulation stopped - fail", data);
             })
         });
 
-        let refreshIntervalHandler = setInterval(checkForUpdates, 1000);
+        let refreshIntervalHandler = setInterval(checkForUpdates, 3000);
     });
+
     function checkForUpdates() {
-        $.get("{{ url_for('check_for_updates') }}").done(function(updates) {
+        $.get("{{ url_for('check_for_updates') }}").done(function (updates) {
             console.log(updates);
         })
     }
-    
+
 </script>
 {% endblock %}

@@ -80,7 +80,7 @@ class PySparkService:
             ),
         )
         try:
-            c_operation = self.client.create_batch(request={
+            create_batch_operation = self.client.create_batch(request={
                 "parent": f"projects/{self.project_id}/locations/{self.region}",
                 "batch": batch,
                 "batch_id": self.batch_id
@@ -97,7 +97,7 @@ class PySparkService:
             return {"status": "INTERNAL_SERVER_ERROR", "message": "Internal server error."}
         except Exception as e:
             return {"status": "ERROR", "message": str(e)}
-        assert c_operation is not None
+        assert create_batch_operation is not None
         return {"status": "SUBMITTED", "message": "Job submitted."}
 
     def get_stats(self):
@@ -122,7 +122,7 @@ class PySparkService:
             return {"status": "ERROR", "message": str(e)}
         logging.info("Found existing operation. Canceling the job")
         try:
-            self.client.cancel_batch(request={"name": batch_operation.name})
+            self.client.cancel_operation(request={"name": batch_operation.name})
         except Exception as e:
             logging.exception(e)
             return {"status": "ERROR", "message": str(e)}
@@ -132,7 +132,7 @@ class PySparkService:
         except Exception as e:
             logging.exception(e)
             return {"status": "ERROR", "message": str(e)}
-        return {"status": "CANCELLED", "message": "Job cancelled and deleted."}
+        return {"status": "CANCELLED", "message": "Job not found."}
 
     def get_job_status(self) -> JobStatus:
         try:
@@ -140,7 +140,7 @@ class PySparkService:
                 "name": self.full_batch_id
             })
         except exceptions.NotFound:
-            return JobStatus(status=dataproc.Batch.State.CANCELLED, message="Job not found or not started.", is_running=False)
+            return JobStatus(status=dataproc.Batch.State.CANCELLED, message="Job not found.", is_running=False)
         except Exception as e:
             logging.exception(e)
             return JobStatus(status=dataproc.Batch.State.ERROR, message=str(e), is_running=False)

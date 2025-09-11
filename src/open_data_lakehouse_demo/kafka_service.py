@@ -55,7 +55,7 @@ class KafkaService:
 
 
     @classmethod
-    def continuous_message_producer(cls, stop_event, bootstrap_servers, topic, interval_seconds=5):
+    def start_kafka_messages_stream(cls, stop_event, bootstrap_servers, topic, interval_seconds=2):
         """Continuously sends Kafka messages until the stop_event is set."""
         # Get data from the past, with updated timestamps to simulate new data
         bigquery_client = BigQueryService(os.getenv("BQ_DATASET"))
@@ -79,6 +79,7 @@ class KafkaService:
             except Exception as e:
                 logging.exception(e)
             time.sleep(interval_seconds)
+        stop_event.set()
         logging.info("Kafka continuous producer stopped.")
 
     @classmethod
