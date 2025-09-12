@@ -1,6 +1,6 @@
 export PROJECT_ID=$(gcloud config get-value project)
 export REGION=$(gcloud run services list --format="value(region)" | head -n 1)
-export KAFKA_BROKERS=$(gcloud manaaged-kafka clusters list --location us-central1 --format="value(bootstrapAddress)")
+export KAFKA_BROKERS=$(gcloud managed-kafka clusters list --location us-central1 --format="value(bootstrapAddress)")
 
 gcloud dataproc batches submit pyspark \
   gs://${PROJECT_ID}-ridership-lakehouse/notebooks_and_code/pyspark-job.py \

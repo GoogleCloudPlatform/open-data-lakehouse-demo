@@ -38,38 +38,38 @@
 <div class="mb-8 flex flex-wrap gap-4">
 
     <button class="bg-blue-600 hover:bg-blue-900 text-white font-bold py-2 px-4 rounded-lg shadow-md transition-all duration-300 ease-in-out transform hover:scale-105 cursor-pointer"
-            id="start-spark-simulation">
+            id="start_spark_simulation">
         ▶️ Start Spark Buses Processing
     </button>
     <button class="bg-red-600 hover:bg-red-900 text-white font-bold py-2 px-4 rounded-lg shadow-md transition-all duration-300 ease-in-out transform hover:scale-105 cursor-pointer"
-            id="stop-spark-simulation">
+            id="stop_spark_simulation">
         ⏹️ Abort Spark Buses Processing
     </button>
 
     <div class="flex items-center space-x-2">
-        <div id="processing-status-icon" class="w-4 h-4 rounded-full bg-gray-500"></div>
-        <span id="processing-status-message" class="text-gray-400">Processing: Not Running</span>
+        <div id="spark-status-icon" class="w-4 h-4 rounded-full bg-gray-500"></div>
+        <span id="spark-status-message-wrapper" class="text-gray-400">Processing: <span id="spark-status-message">...</span></span>
     </div>
 </div>
 <div class="mb-8 flex flex-wrap gap-4">
     <button class="bg-blue-600 hover:bg-blue-900 text-white font-bold py-2 px-4 rounded-lg shadow-md transition-all duration-300 ease-in-out transform hover:scale-105 cursor-pointer"
-            id="start-simulation">
+            id="start_kafka_simulation">
         ▶️ Start Kafka Buses Simulation
     </button>
     <button class="bg-red-600 hover:bg-red-900 text-white font-bold py-2 px-4 rounded-lg shadow-md transition-all duration-300 ease-in-out transform hover:scale-105 cursor-pointer"
-            id="stop-simulation">
+            id="stop_kafka_simulation">
         ⏹️ Abort Kafka Buses Simulations
     </button>
 
     <div class="flex items-center space-x-2">
-        <div id="simulation-status-icon" class="w-4 h-4 rounded-full bg-gray-500"></div>
-        <span id="simulation-status-message" class="text-gray-400">Simulation: Not Running</span>
+        <div id="kafka-status-icon" class="w-4 h-4 rounded-full bg-gray-500"></div>
+        <span id="kafka-status-message-wrapper" class="text-gray-400">Simulation: <span id="kafka-status-message">...</span>
     </div>
 
 </div>
 <div class="bg-gray-800 shadow-2xl rounded-lg overflow-hidden">
     <div class="overflow-x-auto">
-        <table class="min-w-full">
+        <table class="min-w-full" id="bus-lines-table">
             <thead class="bg-gray-700">
             <tr>
                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Bus Line
@@ -81,11 +81,13 @@
                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Frequency
                     (Minutes)
                 </th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Updates</th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Update Time</th>
             </tr>
             </thead>
             <tbody class="divide-y divide-gray-700">
             {% for bus_line in bus_lines %}
-            <tr class="hover:bg-gray-700/50 transition-colors duration-200">
+            <tr class="hover:bg-gray-700/50 transition-colors duration-200" id="bus-line-{{ bus_line.bus_line_id }}">
                 <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-100">{{ bus_line.bus_line }} ({{
                     bus_line.bus_line_id }})
                 </td>
@@ -97,6 +99,8 @@
                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-400">
                     {{ bus_line.frequency_minutes }}
                 </td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-400 bus-updates"></td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-400 update-time"></td>
             </tr>
             {% endfor %}
             </tbody>
@@ -105,33 +109,115 @@
 </div>
 <script type="application/javascript">
     $(document).ready(function () {
-        $("button#start-simulation").on("click", function (event) {
-            $.post("{{ url_for('start_simulation') }}", function (data) {
-                console.log("Simulation started", data);
-            }).done(function (data) {
-                console.log("Simulation started - done", data);
+        $("button#start_spark_simulation").on("click", function (event) {
+            $.post("{{ url_for('start_spark_simulation') }}").done(function (data) {
+                console.log("Spark simulation started", data);
             }).fail(function (data) {
-                console.log("Simulation started - fail", data);
-            })
+                console.log("Spark simulation started - fail", data);
+            });
         });
 
-        $("button#stop-simulation").on("click", function (event) {
-            $.post("{{ url_for('stop_simulation') }}", function (data) {
-                console.log("Simulation stopped", data);
-            }).done(function (data) {
-                console.log("Simulation stopped - done", data);
+        $("button#stop_spark_simulation").on("click", function (event) {
+            $.post("{{ url_for('stop_spark_simulation') }}").done(function (data) {
+                console.log("Spark simulation stopped", data);
             }).fail(function (data) {
-                console.log("Simulation stopped - fail", data);
-            })
+                console.log("Spark simulation stopped - fail", data);
+            });
+        });
+
+        $("button#start_kafka_simulation").on("click", function (event) {
+            $.post("{{ url_for('start_kafka_simulation') }}").done(function (data) {
+                console.log("Kafka simulation started", data);
+            }).fail(function (data) {
+                console.log("Kafka simulation started - fail", data);
+            });
+        });
+
+        $("button#stop_kafka_simulation").on("click", function (event) {
+            $.post("{{ url_for('stop_kafka_simulation') }}").done(function (data) {
+                console.log("Kafka simulation stopped", data);
+            }).fail(function (data) {
+                console.log("Kafka simulation stopped - fail", data);
+            });
         });
 
         let refreshIntervalHandler = setInterval(checkForUpdates, 3000);
     });
 
+    const background_colors_classes = ["bg-gray-500", "bg-yellow-500", "bg-red-500", "bg-green-500"];
+    const text_colors_classes = ["text-gray-400", "text-yellow-400", "text-red-400", "text-green-400"];
+    const all_bus_lines = [
+        {% for bus_line in bus_lines %}{{ bus_line.bus_line_id }},{% endfor %}
+    ];
+    function handle_bus_updates(stats) {
+        if (stats === undefined) {
+            $("#bus-lines-table tbody tr .bus-updates").removeClass(text_colors_classes).addClass("text-gray-400").text("No processing is running");
+            return;
+        }
+        stats.forEach(function (bus_update) {
+            const target_msg_cell = $("#bus-line-" + bus_update.bus_line_id + " .bus-updates");
+            const target_date_cell = $("#bus-line-" + bus_update.bus_line_id + " .update-time");
+            const total_passengers = bus_update["total_passengers"];
+            const total_capacity = bus_update["total_capacity"];
+
+            const message = `${total_passengers} passengers / ${total_capacity} capacity .`;
+            target_date_cell.text(new Date(bus_update["update_timestamp"]));
+            if (bus_update["total_passengers"] > bus_update["total_capacity"]) {
+                target_msg_cell.removeClass(text_colors_classes).addClass("text-red-400").text(`${message} Overfilled!!`);
+            } else {
+                target_msg_cell.removeClass(text_colors_classes).addClass("text-green-400").text(`${message}`);
+            }
+        });
+        const non_reported_bus_lines = stats.map(bus_update => bus_update.bus_line_id).filter(bus_line_id => !all_bus_lines.includes(bus_line_id));
+        non_reported_bus_lines.forEach(bus_line_id => {
+            $("#bus-line-" + bus_line_id + " .bus-updates").removeClass(text_colors_classes).addClass("text-gray-400").text("No active lines currently.");
+            $("#bus-line-" + bus_line_id + " .update-time").text("");
+            
+        });
+    }
+
     function checkForUpdates() {
-        $.get("{{ url_for('check_for_updates') }}").done(function (updates) {
-            console.log(updates);
-        })
+        $.get("{{ url_for('spark_status') }}").done(function (updates) {
+            handle_bus_updates(updates["stats"])
+            switch (updates["status"].toUpperCase()) {
+                case "PENDING":
+                    $("#spark-status-icon").removeClass(background_colors_classes).addClass("bg-yellow-500");
+                    $("#spark-status-message-wrapper").removeClass(text_colors_classes).addClass("text-yellow-400");
+                    break;
+                case "RUNNING":
+                    $("#spark-status-icon").removeClass(background_colors_classes).addClass("bg-green-500");
+                    $("#spark-status-message-wrapper").removeClass(text_colors_classes).addClass("text-green-400");
+                    break;
+                case "ERROR":
+                    $("#spark-status-icon").removeClass(background_colors_classes).addClass("bg-red-500");
+                    $("#spark-status-message-wrapper").removeClass(text_colors_classes).addClass("text-red-400");
+                    break;
+                default:
+                    $("#spark-status-icon").removeClass(background_colors_classes).addClass("bg-gray-500");
+                    $("#spark-status-message-wrapper").removeClass(text_colors_classes).addClass("text-gray-400");
+                    break;
+            }
+            $("#spark-status-message").text(`${updates["message"]} (${updates["status"]})`);
+        });
+        $.get("{{ url_for('kafka_status') }}").done(function (updates) {
+            let extra_message = "";
+            switch (updates["status"].toUpperCase()) {
+                case "ACTIVE":
+                    $("#kafka-status-icon").removeClass(background_colors_classes).addClass("bg-green-500");
+                    $("#kafka-status-message-wrapper").removeClass(text_colors_classes).addClass("text-green-400");
+                    extra_message = ` Sent ${updates["stats"]["sent_messages"]} out of ${updates["stats"]["total_messages"]}`
+                    break;
+                case "ERROR":
+                    $("#kafka-status-icon").removeClass(background_colors_classes).addClass("bg-red-500");
+                    $("#kafka-status-message-wrapper").removeClass(text_colors_classes).addClass("text-red-400");
+                    break;
+                default:
+                    $("#kafka-status-icon").removeClass(background_colors_classes).addClass("bg-gray-500");
+                    $("#kafka-status-message-wrapper").removeClass(text_colors_classes).addClass("text-gray-400");
+                    break;
+            }
+            $("#kafka-status-message").text(`${updates["message"]}${extra_message}`);
+        });
     }
 
 </script>

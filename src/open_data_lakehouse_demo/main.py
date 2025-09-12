@@ -61,64 +61,63 @@ spark_service = PySparkService(
     SUBNET_URI
 )
 
-def get_kafka_status():
+@app.route("/spark_status", methods=["GET"])
+def spark_status():
+    global spark_service
+    status = spark_service.get_job_status()
+    if status.is_running:
+        return jsonify({
+            **status.to_dict(),
+            "stats": spark_service.get_stats()
+        })
+    else:
+        return jsonify(status.to_dict())
+
+@app.route("/kafka_status", methods=["GET"])
+def kafka_status():
     kafka_service = KafkaService()
     if not app.config[KAFKA_TASK_ID_KEY]:
-         return {"status": "inactive", "message": "No kafka producer has been submitted."}
-    
+         return jsonify({"status": "inactive", "message": "No kafka producer has been submitted."})
+
     if app.config[KAFKA_TASK_ID_KEY].running():
-        return {
-            "status": "active",
-            "message": "Kafka producer job is running.",
-            "stats": kafka_service.get_stats(),
-        }
+        return jsonify(
+            {
+                "status": "active",
+                "message": "Kafka producer job is running.",
+                "stats": kafka_service.get_stats(),
+            }
+        )
 
     if app.config[KAFKA_TASK_ID_KEY].done():
         try:
             result = app.config[KAFKA_TASK_ID_KEY].result()
-            return {
-                "status": "finished",
-                "message": "Kafka producer job has completed.",
-                "result": str(result),
-                "stats": kafka_service.get_stats(),
-            }
+            return jsonify(
+                {
+                    "status": "finished",
+                    "message": "Kafka producer job has completed.",
+                    "result": str(result),
+                    "stats": kafka_service.get_stats(),
+                }
+            )
         except Exception as e:
-             return {
+             return jsonify({
                 "status": "error",
                 "message": f"Kafka producer job failed with an exception: {e}"
-            }
-        
-    return {"status": "unknown", "message": "Could not determine job status."}
+            })
 
-def get_spark_status():
+    return jsonify({"status": "unknown", "message": "Could not determine job status."})
+
+@app.route("/start_spark_simulation", methods=["POST"])
+def start_spark_simulation():
     global spark_service
     status = spark_service.get_job_status()
     if status.is_running:
-        return {
-            **status.to_dict(),
-            "stats": spark_service.get_stats()
-        }
-    else:
-        return status.to_dict()
-
-@app.route("/check-for-updates", methods=["GET"])
-def check_for_updates():
-    return jsonify({
-        "spark": get_spark_status(),
-        "kafka": get_kafka_status(),
-    })
-
-@app.route("/start-spark-simulation", methods=["POST"])
-def start_spark_simulation():
-    global spark_service
-    spark_status = spark_service.get_job_status()
-    if spark_status.is_running:
-        return {"message": "Spark streaming is already running."}
+        return jsonify({"message": "Spark streaming is already running."})
     logging.info("Starting spark streaming app...")
-    spark_status = spark_service.start_pyspark()
-    return spark_status
+    status = spark_service.start_pyspark()
+    return jsonify(status)
 
-@app.route("/start-kafka-simulation", methods=["POST"])
+@app.route("/start_kafka_simulation", methods=["POST"])
 def start_kafka_simulation():
     if app.config[KAFKA_TASK_ID_KEY] is not None and not executor.futures.done(app.config[KAFKA_TASK_ID_KEY]):
         return jsonify({"message": "Producer is already running."})
@@ -133,13 +132,13 @@ def start_kafka_simulation():
         KAFKA_BOOTSTRAP, "bus-updates")
     return jsonify({"message": "Kafka producer started in the background."})
 
-@app.route("/stop-spark-simulation", methods=["POST"])
+@app.route("/stop_spark_simulation", methods=["POST"])
 def stop_spark_simulation():
     global spark_service
     stop_status = spark_service.cancel_job()
     return jsonify(stop_status)
 
-@app.route("/stop-kafka-simulation", methods=["POST"])
+@app.route("/stop_kafka_simulation", methods=["POST"])
 def stop_kafka_simulation():
     if app.config[KAFKA_EVENT_KEY]:
         app.config[KAFKA_EVENT_KEY].set()

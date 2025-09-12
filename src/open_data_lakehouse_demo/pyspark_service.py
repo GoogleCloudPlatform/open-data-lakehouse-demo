@@ -1,5 +1,6 @@
 from __future__ import annotations
 import logging
+import time
 from dataclasses import dataclass
 
 from google.api_core import exceptions
@@ -49,7 +50,7 @@ class PySparkService:
         return f"projects/{self.project_id}/locations/{self.region}/batches/{self.batch_id}"
 
     
-    def start_pyspark(self):
+    def start_pyspark(self, retry_count: int = 0):
         batch = dataproc.Batch(
             pyspark_batch=dataproc.PySparkBatch(
                 main_python_file_uri=f"gs://{self.gcs_main_bucket}/notebooks_and_code/pyspark-job.py",
@@ -86,6 +87,11 @@ class PySparkService:
                 "batch_id": self.batch_id
             })
         except exceptions.AlreadyExists:
+            if retry_count < 3:
+                retry_count += 1
+                logging.info(f"Job already exists. Deleting and retrying (Attempt {retry_count})")
+                self.cancel_job()
+                return self.start_pyspark(retry_count)
             return {"status": "ALREADY_EXISTS", "message": "Job already exists."}
         except exceptions.PermissionDenied:
             return {"status": "PERMISSION_DENIED", "message": "Permission denied."}
@@ -94,7 +100,10 @@ class PySparkService:
         except exceptions.BadRequest:
             return {"status": "BAD_REQUEST", "message": "Bad request."}
         except exceptions.InternalServerError:
-            return {"status": "INTERNAL_SERVER_ERROR", "message": "Internal server error."}
+            return {
+                "status": "INTERNAL_SERVER_ERROR",
+                "message": "Internal server error.",
+            }
         except Exception as e:
             return {"status": "ERROR", "message": str(e)}
         assert create_batch_operation is not None
@@ -109,7 +118,7 @@ class PySparkService:
                 "name": self.full_batch_id,
             })
         except exceptions.NotFound:
-            logging.warning("Batch Job not found or not started.")
+            logging.info("Batch Job not found or not started.")
             return {"status": "NOT_FOUND", "message": "Batch Job not found or not started."}
         except Exception as e:
             logging.exception(e)
@@ -128,6 +137,8 @@ class PySparkService:
             return {"status": "ERROR", "message": str(e)}
         logging.info("Cancelled existing operation. Deleting the batch job")
         try:
+            logging.info("Waiting for 5 seconds, until cancel state is propagated.")
+            time.sleep(5)
             self.client.delete_batch(request={"name": self.full_batch_id})
         except Exception as e:
             logging.exception(e)
@@ -140,7 +151,7 @@ class PySparkService:
                 "name": self.full_batch_id
             })
         except exceptions.NotFound:
-            return JobStatus(status=dataproc.Batch.State.CANCELLED, message="Job not found.", is_running=False)
+            return JobStatus(status=dataproc.Batch.State.STATE_UNSPECIFIED, message="Job not found.", is_running=False)
         except Exception as e:
             logging.exception(e)
             return JobStatus(status=dataproc.Batch.State.ERROR, message=str(e), is_running=False)
@@ -160,7 +171,7 @@ class PySparkService:
             case dataproc.Batch.State.CANCELLED:
                 return JobStatus(
                     status=dataproc.Batch.State.CANCELLED,
-                    message="Job cancelled",
+                    message="Job not running",
                     is_running=False
                 )
             case dataproc.Batch.State.PENDING:

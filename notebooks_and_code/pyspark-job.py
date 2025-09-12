@@ -2,7 +2,7 @@ import argparse
 import datetime
 
 import pyspark.sql.functions as f
-from pyspark.sql import SparkSession
+from pyspark.sql import SparkSession, DataFrame
 from pyspark.sql.types import (
     StructType,
     StringType,
@@ -52,11 +52,13 @@ def update_state(new_values, prev_state):
     return bus_line, total_passengers, total_capacity, update_timestamp
 
 # Function to write a micro-batch to BigQuery
-def write_to_bigquery(df, epoch_id, table, gcs_bucket):
+def write_to_bigquery(df: DataFrame, epoch_id, table, gcs_bucket):
     """
     Writes a DataFrame to a BigQuery table, overwriting it completely.
     This function is designed to be used with `forEachBatch`.
     """
+    print(f"Writing to BigQuery at epoch {epoch_id}; {table}")
+    print(df.collect())
     df.write \
       .format("bigquery") \
       .option("table", table) \

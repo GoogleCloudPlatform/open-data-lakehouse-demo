@@ -1,11 +1,12 @@
 import datetime
 
+from google.api_core import exceptions
 from google.cloud import bigquery
 bigquery_client = None
 
 class BigQueryService():
     client = None
-
+    DAYS_TO_QUERY = 10
     def __init__(self, bq_dataset: str):
         self.client = bigquery.Client()
         self.bq_dataset = bq_dataset
@@ -23,12 +24,16 @@ class BigQueryService():
         return [x for x in self.client.query(query).result()]
     
     def get_bus_state(self, table_name: str):
+        try:
+            table_obj = self.client.get_table(f"{self.bq_dataset}.{table_name}")
+        except exceptions.NotFound:
+            return [] 
         query = f"SELECT * FROM {self.bq_dataset}.{table_name}"
         return [dict(x) for x in self.client.query(query).result()]
         
     def get_rides_data(self):
         now = datetime.datetime.now(datetime.UTC)
-        start_timestamp = (now - datetime.timedelta(days=5)).replace(year=2024)
+        start_timestamp = (now - datetime.timedelta(days=self.DAYS_TO_QUERY)).replace(year=2024)
         stop_timestamp = now.replace(year=2024)
 
         query = f"""
