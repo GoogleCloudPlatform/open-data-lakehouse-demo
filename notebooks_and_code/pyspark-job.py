@@ -35,6 +35,7 @@ def update_state(new_values, prev_state):
     bus_line = None
     total_passengers = 0
     total_capacity = 0
+    remaining_at_stop = 0
 
     # The `prev_state` argument is the grouping key `bus_line_id`, an integer.
     # The original code tried to access it as a list, causing a TypeError.
@@ -47,9 +48,10 @@ def update_state(new_values, prev_state):
         else:
             # Update the values with the latest data
             bus_line = value.bus_line
+            remaining_at_stop = value.remaining_at_stop
             total_passengers = value.total_passengers
             total_capacity = value.total_capacity
-    return bus_line, total_passengers, total_capacity, update_timestamp
+    return bus_line, remaining_at_stop, total_passengers, total_capacity, update_timestamp
 
 # Function to write a micro-batch to BigQuery
 def write_to_bigquery(df: DataFrame, epoch_id, table, gcs_bucket):
@@ -174,6 +176,7 @@ def run_pyspark(
     # Define the state schema
     state_schema = StructType([
         StructField("bus_line", StringType()),
+        StructField("remaining_at_stop", IntegerType()),
         StructField("total_passengers", IntegerType()),
         StructField("total_capacity", IntegerType()),
         StructField("update_timestamp", TimestampType())
@@ -186,6 +189,7 @@ def run_pyspark(
         .groupBy("bus_line_id") \
         .agg(f.collect_list(f.struct(
             "bus_line",
+            "remaining_at_stop",
             "total_passengers",
             "total_capacity",
             "last_stop"
@@ -193,6 +197,7 @@ def run_pyspark(
         .withColumn("state", f.expr("stateful_function(updates, bus_line_id)")) \
         .filter(f.col("state").isNotNull()) \
         .withColumn("bus_line", f.col("state.bus_line")) \
+        .withColumn("remaining_at_stop", f.col("state.remaining_at_stop")) \
         .withColumn("total_passengers", f.col("state.total_passengers")) \
         .withColumn("total_capacity", f.col("state.total_capacity")) \
         .withColumn("update_timestamp", f.col("state.update_timestamp")) \

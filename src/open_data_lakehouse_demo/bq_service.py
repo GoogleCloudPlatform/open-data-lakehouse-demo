@@ -27,7 +27,7 @@ class BigQueryService():
         try:
             table_obj = self.client.get_table(f"{self.bq_dataset}.{table_name}")
         except exceptions.NotFound:
-            return [] 
+            return []
         query = f"SELECT * FROM {self.bq_dataset}.{table_name}"
         return [dict(x) for x in self.client.query(query).result()]
         
@@ -64,5 +64,9 @@ class BigQueryService():
                 AND TIMESTAMP('{stop_timestamp.strftime("%Y-%m-%dT%H:%M:%S")}')
         """
         return [dict(x) for x in self.client.query(query).result()]
+
+    def clear_table(self, bigquery_table):
+        query = f"DELETE FROM {self.bq_dataset}.{bigquery_table} WHERE 1=1;"
+        self.client.query(query).result()
 
 

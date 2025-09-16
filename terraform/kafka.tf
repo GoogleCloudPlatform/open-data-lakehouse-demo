@@ -103,6 +103,48 @@ resource "google_managed_kafka_connect_cluster" "default" {
   provider = google-beta
 }
 
+resource "google_managed_kafka_connector" "bus-updates-bigquery-sink-connector" {
+  project         = var.project_id
+  connector_id    = "bus-updates-bigquery-sink-connector"
+  connect_cluster = google_managed_kafka_connect_cluster.default.connect_cluster_id
+  location        = var.region
+
+  configs = {
+    "name"                           = "bus-updates-bigquery-sink-connector"
+    "project"                        = var.project_id
+    "topics"                         = google_managed_kafka_topic.bus_updates.topic_id
+    "tasks.max"                      = "3"
+    "connector.class"                = "com.wepay.kafka.connect.bigquery.BigQuerySinkConnector"
+    "key.converter"                  = "org.apache.kafka.connect.storage.StringConverter"
+    "value.converter"                = "org.apache.kafka.connect.json.JsonConverter"
+    "value.converter.schemas.enable" = "false"
+    "defaultDataset"                 = google_bigquery_dataset.ridership_lakehouse.dataset_id
+  }
+
+  provider = google-beta
+}
+
+resource "google_managed_kafka_connector" "capactiy-alerts-bigquery-sink-connector" {
+  project         = var.project_id
+  connector_id    = "capacity-alerts-bigquery-sink-connector"
+  connect_cluster = google_managed_kafka_connect_cluster.default.connect_cluster_id
+  location        = var.region
+
+  configs = {
+    "name"                           = "capacity-alerts-bigquery-sink-connector"
+    "project"                        = var.project_id
+    "topics"                         = google_managed_kafka_topic.capacity_alerts.topic_id
+    "tasks.max"                      = "3"
+    "connector.class"                = "com.wepay.kafka.connect.bigquery.BigQuerySinkConnector"
+    "key.converter"                  = "org.apache.kafka.connect.storage.StringConverter"
+    "value.converter"                = "org.apache.kafka.connect.json.JsonConverter"
+    "value.converter.schemas.enable" = "false"
+    "defaultDataset"                 = google_bigquery_dataset.ridership_lakehouse.dataset_id
+  }
+
+  provider = google-beta
+}
+
 output "kafka_connect" {
   value = google_managed_kafka_connect_cluster.default.connect_cluster_id
 }

@@ -12,23 +12,19 @@
             can start and stop the simulation of the buses trips.
         </p>
         <p>
-            When you click the "Start Simulation" button, we will start producing Kafka messages to the `bus-updates`
+            When you click the "Start Spark Simulation" button, it will deploy a managed apache spark workload, built with pyspark on the Dataproc Serverless platform. The pyspark streaming job will subscribe to the `bus-updates` topic in the kafka cluster. and will output 2 streams.
+        </p>
+        <ul>
+        <li>a full representation of the current state to the BigQuery "busses-state" table. the web app will periodically query this table, and update the table below to show the results.</li>
+        <li>whenever capacity of a bus runs out, and people are forced to wait at the station, a message will be sent to the `capacity-alerts` topic.</li>
             topic,
-            where each message will indicate a bus coming to a stop. In the interest of time, we will speed the
-            simulation
-            so you can see changes in faster speeds.
+        </ul>
+        <p>
+            When you click the "Start Kafka Simulation" button, it will start a background thread to push events of bus updates to the `bus-updates` topic.
+            These events, are based on past events, from the same date as today, but from 2024. We will query for 5 days worth of events, but push them to Kafka much faster, to show the development of data over time.
         </p>
         <p>
-            In order to consume and analyze the messages, we will also need to press the "Start Processing" button, that
-            will launch a spark-streaming application. This application will consume the kafka messages, and send out
-            some
-            statistics to the front end. When we detect a bus is overfilled, the spark streaming application will also
-            send
-            a kafka message to the `capacity-alerts` topic.
-        </p>
-        <p>
-            In the frontend, when a message comes in to the `capacity-alerts`, we will indicate it visually on the table
-            below.
+            Note that the spark job takes some time to start, while dataproc serverless requires time to allocate resources. It is start the spark job, and wait for to be in a running status, before starting the Kafka simulation.
         </p>
         <p class="text-gray-200 font-bold">
             Don't forget to turn off the simulation when done, to avoid unnecessary costs!
@@ -157,13 +153,14 @@
         stats.forEach(function (bus_update) {
             const target_msg_cell = $("#bus-line-" + bus_update.bus_line_id + " .bus-updates");
             const target_date_cell = $("#bus-line-" + bus_update.bus_line_id + " .update-time");
+            const remaining_at_stop = bus_update["remaining_at_stop"];
             const total_passengers = bus_update["total_passengers"];
             const total_capacity = bus_update["total_capacity"];
 
-            const message = `${total_passengers} passengers / ${total_capacity} capacity .`;
+            const message = `${total_passengers} passengers / ${total_capacity} capacity. ${remaining_at_stop} Passengers remaining at stop.`;
             target_date_cell.text(new Date(bus_update["update_timestamp"]));
-            if (bus_update["total_passengers"] > bus_update["total_capacity"]) {
-                target_msg_cell.removeClass(text_colors_classes).addClass("text-red-400").text(`${message} Overfilled!!`);
+            if (remaining_at_stop > 0) {
+                target_msg_cell.removeClass(text_colors_classes).addClass("text-red-400").text(`${message} - Overfilled!!`);
             } else {
                 target_msg_cell.removeClass(text_colors_classes).addClass("text-green-400").text(`${message}`);
             }
@@ -172,7 +169,7 @@
         non_reported_bus_lines.forEach(bus_line_id => {
             $("#bus-line-" + bus_line_id + " .bus-updates").removeClass(text_colors_classes).addClass("text-gray-400").text("No active lines currently.");
             $("#bus-line-" + bus_line_id + " .update-time").text("");
-            
+
         });
     }
 
@@ -181,6 +178,8 @@
             handle_bus_updates(updates["stats"])
             switch (updates["status"].toUpperCase()) {
                 case "PENDING":
+                case "PRE_RUN_CLEANUP":
+                case "SUBMITTED":
                     $("#spark-status-icon").removeClass(background_colors_classes).addClass("bg-yellow-500");
                     $("#spark-status-message-wrapper").removeClass(text_colors_classes).addClass("text-yellow-400");
                     break;

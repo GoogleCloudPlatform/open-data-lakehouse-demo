@@ -44,8 +44,14 @@ app.config["bq_client"] = BigQueryService(BQ_DATASET)
 KAFKA_EVENT_KEY = "kafka_event"
 KAFKA_TASK_ID_KEY = "kafka_task_id"
 
+SPARK_EVENT_KEY = "spark_event"
+SPARK_TASK_ID_KEY = "spark_task_id"
+
 app.config[KAFKA_EVENT_KEY] = threading.Event()
 app.config[KAFKA_TASK_ID_KEY] = None
+
+app.config[SPARK_EVENT_KEY] = threading.Event()
+app.config[SPARK_TASK_ID_KEY] = None
 
 spark_service = PySparkService(
     PROJECT_ID,
@@ -64,14 +70,13 @@ spark_service = PySparkService(
 @app.route("/spark_status", methods=["GET"])
 def spark_status():
     global spark_service
-    status = spark_service.get_job_status()
-    if status.is_running:
+    if spark_service.status.is_running:
         return jsonify({
-            **status.to_dict(),
+            **spark_service.status.to_dict(),
             "stats": spark_service.get_stats()
         })
     else:
-        return jsonify(status.to_dict())
+        return jsonify(spark_service.status.to_dict())
 
 @app.route("/kafka_status", methods=["GET"])
 def kafka_status():
@@ -110,12 +115,17 @@ def kafka_status():
 @app.route("/start_spark_simulation", methods=["POST"])
 def start_spark_simulation():
     global spark_service
-    status = spark_service.get_job_status()
-    if status.is_running:
-        return jsonify({"message": "Spark streaming is already running."})
+    if spark_service.status.is_running:
+        logging.info("Spark streaming app is already running.")
+        return jsonify(spark_service.status.to_dict())
     logging.info("Starting spark streaming app...")
-    status = spark_service.start_pyspark()
-    return jsonify(status)
+    if app.config[SPARK_EVENT_KEY]:
+        app.config[SPARK_EVENT_KEY].set()
+    if app.config[SPARK_TASK_ID_KEY]:
+        app.config[SPARK_TASK_ID_KEY].cancel()
+    app.config[SPARK_TASK_ID_KEY] = None
+    app.config[SPARK_TASK_ID_KEY] = executor.submit(spark_service.start_pyspark, app.config[SPARK_EVENT_KEY])
+    return jsonify(spark_service.status.to_dict())
 
 @app.route("/start_kafka_simulation", methods=["POST"])
 def start_kafka_simulation():
@@ -136,6 +146,11 @@ def start_kafka_simulation():
 def stop_spark_simulation():
     global spark_service
     stop_status = spark_service.cancel_job()
+    if app.config[SPARK_EVENT_KEY]:
+        app.config[SPARK_EVENT_KEY].set()
+    if app.config[SPARK_TASK_ID_KEY]:
+        app.config[SPARK_TASK_ID_KEY].cancel()
+    app.config[SPARK_TASK_ID_KEY] = None
     return jsonify(stop_status)
 
 @app.route("/stop_kafka_simulation", methods=["POST"])
