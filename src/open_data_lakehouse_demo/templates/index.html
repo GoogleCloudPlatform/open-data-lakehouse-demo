@@ -24,7 +24,7 @@
             These events, are based on past events, from the same date as today, but from 2024. We will query for 5 days worth of events, but push them to Kafka much faster, to show the development of data over time.
         </p>
         <p>
-            Note that the spark job takes some time to start, while dataproc serverless requires time to allocate resources. It is start the spark job, and wait for to be in a running status, before starting the Kafka simulation.
+            Note that the spark job takes some time to start, while dataproc serverless requires time to allocate resources. It is recommended to start the spark job, and wait for it to be in a RUNNING status, before starting the Kafka simulation.
         </p>
         <p class="text-gray-200 font-bold">
             Don't forget to turn off the simulation when done, to avoid unnecessary costs!
