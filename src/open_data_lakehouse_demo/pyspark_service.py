@@ -8,6 +8,7 @@ from dataclasses import dataclass
 
 from google.api_core import exceptions
 from google.cloud import dataproc_v1 as dataproc, storage
+from google.longrunning.operations_proto_pb2 import GetOperationRequest, CancelOperationRequest
 
 from open_data_lakehouse_demo.bq_service import BigQueryService
 
@@ -58,7 +59,8 @@ class PySparkService:
     @property
     def status(self):
         return self.__status__
-    
+
+    # noinspection PyTypeChecker
     def start_pyspark(self, stop_event, retry_count: int = 0):
         self.__status__ = JobStatus(status=PySparkState.PRE_RUN_CLEANUP, message="Cleaning up previous runs.")
         self.clear_bus_state()
@@ -94,11 +96,13 @@ class PySparkService:
         )
         try:
             self.__status__ = JobStatus(status=PySparkState.PENDING, message="Submitting job.")
-            create_batch_operation = self.client.create_batch(request={
-                "parent": f"projects/{self.project_id}/locations/{self.region}",
-                "batch": batch,
-                "batch_id": self.batch_id
-            })
+            self.client.create_batch(
+                request={
+                    "parent": f"projects/{self.project_id}/locations/{self.region}",
+                    "batch": batch,
+                    "batch_id": self.batch_id
+                }
+            )
         except exceptions.AlreadyExists:
             if retry_count < 3:
                 retry_count += 1
@@ -120,11 +124,12 @@ class PySparkService:
         except Exception as e:
             self.__status__ = JobStatus(status=PySparkState.UNKNOWN_ERROR, message=str(e))
         self.__status__ = JobStatus(status=PySparkState.SUBMITTED, message="Job Submitted")
-        while not stop_event.is_set() and self.__status__.is_running:
+        while not stop_event.is_set() and self.status.is_running:
             time.sleep(1)
             self.__status__ = self.get_job_status()
             if not self.__status__.is_running:
                 logging.warning("Job stopped running")
+                break
 
     def get_stats(self):
         return self.bq_service.get_bus_state(self.bigquery_table)
@@ -136,7 +141,7 @@ class PySparkService:
             })
         except exceptions.NotFound:
             logging.info("Batch Job not found or not started.")
-            self.status = JobStatus(status=PySparkState.NOT_FOUND, message="Job not found.")
+            self.__status__ = JobStatus(status=PySparkState.NOT_FOUND, message="Job not found.")
             return
         except Exception as e:
             logging.exception(e)
@@ -144,7 +149,7 @@ class PySparkService:
             return
         logging.info("Found existing job. Getting the operation attached")
         try:
-            batch_operation = self.client.get_operation(request={"name": get_batch_operation.operation})
+            batch_operation = self.client.get_operation(request=GetOperationRequest(name=get_batch_operation.operation))
         except Exception as e:
             logging.exception(e)
             self.__status__ = JobStatus(status=PySparkState.UNKNOWN_ERROR, message=str(e))
@@ -153,7 +158,7 @@ class PySparkService:
         try:
             logging.info("Cancelling existing operation")
             self.__status__ = JobStatus(status=PySparkState.CANCELLING, message="Cancelling job.")
-            self.client.cancel_operation(request={"name": batch_operation.name})
+            self.client.cancel_operation(request=CancelOperationRequest(name=batch_operation.name))
         except Exception as e:
             logging.exception(e)
             self.__status__ = JobStatus(status=PySparkState.UNKNOWN_ERROR, message=str(e))
@@ -180,11 +185,6 @@ class PySparkService:
             logging.exception(e)
             return JobStatus(status=PySparkState.UNKNOWN_ERROR, message=str(e))
         match operation.state:
-            case dataproc.Batch.State.STATE_UNSPECIFIED:
-                return JobStatus(
-                    status=PySparkState.STATE_UNSPECIFIED,
-                    message="Unknown state - check job manually",
-                )
             case dataproc.Batch.State.FAILED:
                 return JobStatus(
                     status=PySparkState.FAILED,
@@ -209,6 +209,15 @@ class PySparkService:
                 return JobStatus(
                     status=PySparkState.SUCCEEDED,
                     message="Job succeeded",
+                )
+            case dataproc.Batch.State.STATE_UNSPECIFIED:
+                return JobStatus(
+                    status=PySparkState.STATE_UNSPECIFIED,
+                    message="Unknown state - check job manually",
+                )
+        return JobStatus(
+                    status=PySparkState.STATE_UNSPECIFIED,
+                    message="Unknown state - check job manually",
                 )
 
     def clear_bus_state(self):
