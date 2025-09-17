@@ -145,9 +145,10 @@
     const all_bus_lines = [
         {% for bus_line in bus_lines %}{{ bus_line.bus_line_id }},{% endfor %}
     ];
-    function handle_bus_updates(stats) {
-        if (stats === undefined) {
+    function handle_bus_updates(stats, is_running) {
+        if (!is_running) {
             $("#bus-lines-table tbody tr .bus-updates").removeClass(text_colors_classes).addClass("text-gray-400").text("No processing is running");
+            $("#bus-lines-table tbody tr .update-time").text("");
             return;
         }
         stats.forEach(function (bus_update) {
@@ -175,7 +176,7 @@
 
     function checkForUpdates() {
         $.get("{{ url_for('spark_status') }}").done(function (updates) {
-            handle_bus_updates(updates["stats"])
+            handle_bus_updates(updates["stats"], updates["is_running"])
             switch (updates["status"].toUpperCase()) {
                 case "PENDING":
                 case "PRE_RUN_CLEANUP":
