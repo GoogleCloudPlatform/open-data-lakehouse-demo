@@ -44,7 +44,7 @@ resource "google_storage_bucket" "spark_bucket" {
       type = "Delete"
     }
     condition {
-      age = 365
+      age = 2
     }
   }
 }
