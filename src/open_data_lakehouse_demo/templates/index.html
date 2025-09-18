@@ -12,13 +12,13 @@
             can start and stop the simulation of the buses trips.
         </p>
         <p>
-            When you click the "Start Spark Simulation" button, it will deploy a managed apache spark workload, built with pyspark on the Dataproc Serverless platform. The pyspark streaming job will subscribe to the `bus-updates` topic in the kafka cluster. and will output 2 streams.
+            When you click the "Start Spark Simulation" button, it will deploy a managed apache spark workload, built with pyspark on the Dataproc Serverless platform. The pyspark streaming job will subscribe to the `bus-updates` topic in the kafka cluster. and will output 2 streams:
         </p>
-        <ul>
-        <li>a full representation of the current state to the BigQuery "busses-state" table. the web app will periodically query this table, and update the table below to show the results.</li>
-        <li>whenever capacity of a bus runs out, and people are forced to wait at the station, a message will be sent to the `capacity-alerts` topic.</li>
-            topic,
+        <ul class="space-y-1 text-gray-500 list-disc list-inside dark:text-gray-400">
+            <li>A full representation of the current state to the BigQuery "buses-state" table. the web app will periodically query this table, and update the table below to show the results.</li>
+            <li>Whenever capacity of a bus runs out, and people are forced to wait at the station, a message will be sent to the `capacity-alerts` topic.</li>
         </ul>
+        <p>The full code for the pyspark job is hosted on GCS: <a class="font-medium text-blue-600 underline dark:text-blue-500 hover:no-underline" href="{{ pyspark_file_link }}" target="_blank">{{ pyspark_file_link }}</a></p>
         <p>
             When you click the "Start Kafka Simulation" button, it will start a background thread to push events of bus updates to the `bus-updates` topic.
             These events, are based on past events, from the same date as today, but from 2024. We will query for 5 days worth of events, but push them to Kafka much faster, to show the development of data over time.

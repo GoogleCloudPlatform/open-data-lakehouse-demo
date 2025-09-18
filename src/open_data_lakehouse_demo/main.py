@@ -166,7 +166,8 @@ def stop_kafka_simulation():
 @app.route("/index")
 def index():
     bus_lines = app.config["bq_client"].get_all_bus_lines()
-    return render_template("index.html", bus_lines=bus_lines)
+    spark_link = spark_service.pyspark_main_file.replace("gs://", "https://storage.mtls.cloud.google.com/")
+    return render_template("index.html", bus_lines=bus_lines, pyspark_file_link=spark_link)
 
 if __name__ == '__main__':
     import google.cloud.logging

@@ -57,8 +57,12 @@ class PySparkService:
         return f"projects/{self.project_id}/locations/{self.region}/batches/{self.batch_id}"
 
     @property
-    def status(self):
+    def status(self) -> JobStatus:
         return self.__status__
+
+    @property
+    def pyspark_main_file(self) -> str:
+        return f"gs://{self.gcs_main_bucket}/notebooks_and_code/pyspark-job.py"
 
     # noinspection PyTypeChecker
     def start_pyspark(self, stop_event, retry_count: int = 0):
@@ -67,7 +71,7 @@ class PySparkService:
         # self.clear_previous_checkpoints()
         batch = dataproc.Batch(
             pyspark_batch=dataproc.PySparkBatch(
-                main_python_file_uri=f"gs://{self.gcs_main_bucket}/notebooks_and_code/pyspark-job.py",
+                main_python_file_uri=self.pyspark_main_file,
                 args=[
                     f"--kafka-brokers={self.kafka_bootstrap}",
                     f"--kafka-input-topic={self.kafka_topic}",
