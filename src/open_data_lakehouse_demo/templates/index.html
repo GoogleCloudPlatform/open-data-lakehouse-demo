@@ -59,7 +59,7 @@
 
     <div class="flex items-center space-x-2">
         <div id="kafka-status-icon" class="w-4 h-4 rounded-full bg-gray-500"></div>
-        <span id="kafka-status-message-wrapper" class="text-gray-400">Simulation: <span id="kafka-status-message">...</span>
+        <span id="kafka-status-message-wrapper" class="text-gray-400">Simulation: <span id="kafka-status-message">...</span></span>
     </div>
 
 </div>
@@ -176,44 +176,54 @@
 
     function checkForUpdates() {
         $.get("{{ url_for('spark_status') }}").done(function (updates) {
-            handle_bus_updates(updates["stats"], updates["is_running"])
+            handle_bus_updates(updates["stats"], updates["is_running"]);
+            const status_icon = $("#spark-status-icon");
+            const message_wrapper = $("#spark-status-message-wrapper");
+            status_icon.removeClass(background_colors_classes);
+            message_wrapper.removeClass(text_colors_classes);
             switch (updates["status"].toUpperCase()) {
                 case "PENDING":
                 case "PRE_RUN_CLEANUP":
                 case "SUBMITTED":
-                    $("#spark-status-icon").removeClass(background_colors_classes).addClass("bg-yellow-500");
-                    $("#spark-status-message-wrapper").removeClass(text_colors_classes).addClass("text-yellow-400");
+                    status_icon.addClass("bg-yellow-500");
+                    message_wrapper.addClass("text-yellow-400");
                     break;
                 case "RUNNING":
-                    $("#spark-status-icon").removeClass(background_colors_classes).addClass("bg-green-500");
-                    $("#spark-status-message-wrapper").removeClass(text_colors_classes).addClass("text-green-400");
+                    status_icon.addClass("bg-green-500");
+                    message_wrapper.addClass("text-green-400");
                     break;
                 case "ERROR":
-                    $("#spark-status-icon").removeClass(background_colors_classes).addClass("bg-red-500");
-                    $("#spark-status-message-wrapper").removeClass(text_colors_classes).addClass("text-red-400");
+                    status_icon.addClass("bg-red-500");
+                    message_wrapper.addClass("text-red-400");
                     break;
                 default:
-                    $("#spark-status-icon").removeClass(background_colors_classes).addClass("bg-gray-500");
-                    $("#spark-status-message-wrapper").removeClass(text_colors_classes).addClass("text-gray-400");
+                    status_icon.addClass("bg-gray-500");
+                    message_wrapper.addClass("text-gray-400");
                     break;
             }
-            $("#spark-status-message").text(`${updates["message"]} (${updates["status"]})`);
+            message_wrapper.text(`${updates["message"]} (${updates["status"]})`);
         });
         $.get("{{ url_for('kafka_status') }}").done(function (updates) {
             let extra_message = "";
+            const status_icon = $("#kafka-status-icon");
+            const message_wrapper = $("#kafka-status-message-wrapper");
+            
+            status_icon.removeClass(background_colors_classes);
+            message_wrapper.removeClass(text_colors_classes);
+            
             switch (updates["status"].toUpperCase()) {
                 case "ACTIVE":
-                    $("#kafka-status-icon").removeClass(background_colors_classes).addClass("bg-green-500");
-                    $("#kafka-status-message-wrapper").removeClass(text_colors_classes).addClass("text-green-400");
+                    status_icon.addClass("bg-green-500");
+                    message_wrapper.addClass("text-green-400");
                     extra_message = ` Sent ${updates["stats"]["sent_messages"]} out of ${updates["stats"]["total_messages"]}`
                     break;
                 case "ERROR":
-                    $("#kafka-status-icon").removeClass(background_colors_classes).addClass("bg-red-500");
-                    $("#kafka-status-message-wrapper").removeClass(text_colors_classes).addClass("text-red-400");
+                    status_icon.addClass("bg-red-500");
+                    message_wrapper.addClass("text-red-400");
                     break;
                 default:
-                    $("#kafka-status-icon").removeClass(background_colors_classes).addClass("bg-gray-500");
-                    $("#kafka-status-message-wrapper").removeClass(text_colors_classes).addClass("text-gray-400");
+                    status_icon.addClass("bg-gray-500");
+                    message_wrapper.addClass("text-gray-400");
                     break;
             }
             $("#kafka-status-message").text(`${updates["message"]}${extra_message}`);
