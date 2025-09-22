@@ -32,8 +32,8 @@ def clean_notebooks(notebook_path: str):
 
 
 def run():
-    current_dir = pathlib.Path(os.getcwd())
-    notebooks_dir = os.path.join(current_dir.parent, "notebooks_and_code")
+    notebooks_dir = (pathlib.Path(__file__).parent.parent / "notebooks_and_code").resolve()
+    print(f"Cleaning notebooks in {notebooks_dir}")
     for root, dirs, files in os.walk(notebooks_dir):
         for file in files:
             if file.endswith(".ipynb"):
