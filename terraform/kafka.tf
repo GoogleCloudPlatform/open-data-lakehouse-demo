@@ -58,6 +58,9 @@ resource "google_managed_kafka_cluster" "default" {
   labels = {
     key = "value"
   }
+  timeouts {
+    create = "60m"
+  }
 }
 
 resource "google_managed_kafka_topic" "bus_updates" {
