@@ -1,4 +1,5 @@
 import datetime
+import logging
 
 from google.api_core import exceptions
 from google.cloud import bigquery
@@ -66,6 +67,12 @@ class BigQueryService():
         return [dict(x) for x in self.client.query(query).result()]
 
     def clear_table(self, bigquery_table):
+        # make sure the table exists
+        try:
+            self.client.get_table(f"{self.bq_dataset}.{bigquery_table}")
+        except exceptions.NotFound:
+            logging.info(f"Drop operation - Table {self.bq_dataset}.{bigquery_table} not found. Skipping")
+            return
         query = f"DELETE FROM {self.bq_dataset}.{bigquery_table} WHERE 1=1;"
         self.client.query(query).result()
 

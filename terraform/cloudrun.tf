@@ -19,6 +19,13 @@ resource "null_resource" "deployment_trigger" {
   }
 }
 
+resource "google_service_account" "cloudrun_sa" {
+  project      = var.project_id
+  account_id   = "open-lakehouse-demo-run-sa"
+  display_name = "Cloud Run Service Account for Open Lakehouse Demo"
+  description  = "Service account for the Cloud Run service to run PySpark jobs and interact with BigQuery and GCS."
+}
+
 # the cloud service
 resource "google_cloud_run_v2_service" "default" {
   provider = google
@@ -28,9 +35,11 @@ resource "google_cloud_run_v2_service" "default" {
   ingress  = "INGRESS_TRAFFIC_ALL"
 
   deletion_protection = false # set to "true" in production
-
+  
   template {
+    
     vpc_access {
+      egress = "ALL_TRAFFIC"
       network_interfaces {
         network    = google_compute_network.open-lakehouse-network.id
         subnetwork = google_compute_subnetwork.open-lakehouse-subnetwork.id
@@ -93,6 +102,7 @@ resource "google_cloud_run_v2_service" "default" {
         }
       }
     }
+    service_account = google_service_account.cloudrun_sa.email
   }
 
   traffic {
@@ -104,7 +114,9 @@ resource "google_cloud_run_v2_service" "default" {
     google_artifact_registry_repository.docker_repo,
     module.gcloud_build_webapp.wait,
     module.project_services,
-    google_project_organization_policy.allow_policy_member_domains
+    google_project_organization_policy.allow_policy_member_domains,
+    google_project_iam_member.cloud_run_user_bq_permissions,
+    google_project_iam_member.cloud_run_user_dataproc_permissions
   ]
 
   lifecycle {
@@ -130,18 +142,18 @@ resource "google_cloud_run_v2_service_iam_binding" "default" {
 }
 # Assigns the Storage Object Viewer role to the service account, allowing it to read objects in GCS buckets.
 resource "google_project_iam_member" "cloud_run_user_bq_permissions" {
-  for_each = toset(["roles/bigquery.dataEditor", "roles/bigquery.jobUser"])
+  for_each = toset(["roles/bigquery.dataEditor", "roles/bigquery.jobUser", "roles/iam.serviceAccountUser"])
   project = var.project_id
   role    = each.value
 
-  member = "serviceAccount:${google_cloud_run_v2_service.default.template[0].service_account}"
+  member = "serviceAccount:${google_service_account.cloudrun_sa.email}"
 }
 
 resource "google_project_iam_member" "cloud_run_user_dataproc_permissions" {
-  for_each = toset(["roles/dataproc.editor"])
+  for_each = toset(["roles/dataproc.editor", "roles/storage.expressModeUserAccess"])
   project = var.project_id
   role    = each.value
-  member  = "serviceAccount:${google_cloud_run_v2_service.default.template[0].service_account}"
+  member  = "serviceAccount:${google_service_account.cloudrun_sa.email}"
 }
 
 output "cloud_run_url" {

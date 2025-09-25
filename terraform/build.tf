@@ -72,10 +72,9 @@ module "gcloud_build_webapp" {
   create_cmd_triggers = {
     source_contents_hash = local.cloud_build_content_hash
   }
-  # Currently commenting this out, as this triggers an issue with the gcloud module. waiting for resolution.
-  # depends_on = [
-  #   time_sleep.wait_for_policy_propagation
-  # ]
+  depends_on = [
+    module.cloud_build_account
+  ]
 }
 
 
