@@ -155,7 +155,7 @@ resource "google_project_iam_member" "cloud_run_user_bq_permissions" {
 }
 
 resource "google_project_iam_member" "cloud_run_user_dataproc_permissions" {
-  for_each = toset(["roles/dataproc.editor", "roles/dataproc.worker", "roles/storage.expressModeUserAccess"])
+  for_each = toset(["roles/dataproc.editor", "roles/dataproc.worker", "roles/storage.expressModeUserAccess", "roles/managedkafka.client"])
   project = var.project_id
   role    = each.value
   member  = "serviceAccount:${google_service_account.cloudrun_sa.email}"

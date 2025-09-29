@@ -72,9 +72,12 @@ module "gcloud_build_webapp" {
   create_cmd_triggers = {
     source_contents_hash = local.cloud_build_content_hash
   }
-  depends_on = [
-    module.cloud_build_account
-  ]
+
+  # Commenting the dependency for the wait command - the gcloud module has a bug when specifying explicit dependenceis
+  # This means that the first build might fail, since the IAM permissions hasn't cascaded yet.
+  # depends_on = [
+  #   module.wait_for_policy_propagation
+  # ]
 }
 
 
