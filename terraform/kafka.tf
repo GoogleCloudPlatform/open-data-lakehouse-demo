@@ -104,6 +104,9 @@ resource "google_managed_kafka_connect_cluster" "default" {
   depends_on = [module.project_services]
 
   provider = google-beta
+  timeouts {
+    create = "60m"
+  }
 }
 
 resource "google_managed_kafka_connector" "bus-updates-bigquery-sink-connector" {

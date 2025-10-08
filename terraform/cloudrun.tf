@@ -118,7 +118,6 @@ resource "google_cloud_run_v2_service" "default" {
     google_artifact_registry_repository.docker_repo,
     module.gcloud_build_webapp.wait,
     module.project_services,
-    google_project_organization_policy.allow_policy_member_domains,
     google_project_iam_member.cloud_run_user_bq_permissions,
     google_project_iam_member.cloud_run_user_dataproc_permissions
   ]
@@ -142,7 +141,6 @@ resource "google_cloud_run_v2_service_iam_binding" "default" {
 
   depends_on = [
     google_cloud_run_v2_service.default,
-    google_project_organization_policy.allow_policy_member_domains
   ]
 }
 # Assigns the Storage Object Viewer role to the service account, allowing it to read objects in GCS buckets.
