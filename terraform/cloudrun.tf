@@ -130,33 +130,20 @@ resource "google_cloud_run_v2_service" "default" {
 
 }
 
-resource "google_cloud_run_v2_service_iam_binding" "default" {
-  project  = var.project_id
-  location = google_cloud_run_v2_service.default.location
-  name     = google_cloud_run_v2_service.default.name
-  role     = "roles/run.invoker"
-  members = [
-    "allUsers"
-  ]
-
-  depends_on = [
-    google_cloud_run_v2_service.default,
-  ]
-}
 # Assigns the Storage Object Viewer role to the service account, allowing it to read objects in GCS buckets.
 resource "google_project_iam_member" "cloud_run_user_bq_permissions" {
   for_each = toset(["roles/bigquery.dataEditor", "roles/bigquery.jobUser", "roles/iam.serviceAccountUser"])
-  project = var.project_id
-  role    = each.value
+  project  = var.project_id
+  role     = each.value
 
   member = "serviceAccount:${google_service_account.cloudrun_sa.email}"
 }
 
 resource "google_project_iam_member" "cloud_run_user_dataproc_permissions" {
   for_each = toset(["roles/dataproc.editor", "roles/dataproc.worker", "roles/storage.expressModeUserAccess", "roles/managedkafka.client"])
-  project = var.project_id
-  role    = each.value
-  member  = "serviceAccount:${google_service_account.cloudrun_sa.email}"
+  project  = var.project_id
+  role     = each.value
+  member   = "serviceAccount:${google_service_account.cloudrun_sa.email}"
 }
 
 output "cloud_run_url" {
