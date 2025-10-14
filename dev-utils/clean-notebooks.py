@@ -28,7 +28,7 @@ def clean_notebooks(notebook_path: str):
             cell["outputs"] = []
     notebook_json["cells"] = cells
     with open(notebook_path, "w") as fp:
-        json.dump(notebook_json, fp)
+        json.dump(notebook_json, fp, indent=2)
 
 
 def run():
