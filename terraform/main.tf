@@ -31,6 +31,7 @@ module "project_services" {
     "dataproc.googleapis.com",
     "bigqueryconnection.googleapis.com",
     "bigquerystorage.googleapis.com",
+    "biglake.googleapis.com",
     "iam.googleapis.com",
     "logging.googleapis.com",
     "vpcaccess.googleapis.com",
