@@ -15,4 +15,7 @@ resource "null_resource" "run_python_script" {
       BUCKET_NAME = google_storage_bucket.data_lakehouse_bucket.name
     }
   }
+  triggers = {
+    always_run = timestamp()
+  }
 }
