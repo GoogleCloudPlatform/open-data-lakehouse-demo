@@ -11,6 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+
 import logging
 import os
 import threading  # Used to manage the stop signal for the background task
@@ -18,9 +19,9 @@ import threading  # Used to manage the stop signal for the background task
 from flask import Flask, render_template, jsonify
 from flask_executor import Executor
 
-from open_data_lakehouse_demo.bq_service import BigQueryService
-from open_data_lakehouse_demo.kafka_service import KafkaService
-from open_data_lakehouse_demo.pyspark_service import PySparkService
+from bq_service import BigQueryService
+from kafka_service import KafkaService
+from pyspark_service import PySparkService
 
 templates_dir = os.path.join(os.path.dirname(__file__), "templates")
 

@@ -6,7 +6,7 @@ data "archive_file" "scripts" {
 }
 
 # This resource runs the script
-resource "null_resource" "run_python_script" {
+resource "null_resource" "run_copy_script" {
   provisioner "local-exec" {
     command = "${path.module}/scripts/copy-data.sh"
 
