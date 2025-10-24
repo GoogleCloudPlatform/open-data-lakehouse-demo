@@ -31,6 +31,12 @@ dependencies = [
 
 [dependency-groups]
 dev = [
+    "black>=25.9.0",
     "jupytext>=1.18.1",
+    "nb-clean>=4.0.1",
     "pre-commit>=4.3.0",
 ]
+
+[tool.jupytext]
+formats = "ipynb,py:percent"
+
