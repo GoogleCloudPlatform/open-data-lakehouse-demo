@@ -57,3 +57,5 @@ crash.*.log
 terraform/.terraform.lock.hcl
 
 **/*.egg-info
+
+**/.ipynb_checkpoints

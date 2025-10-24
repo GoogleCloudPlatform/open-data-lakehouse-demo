@@ -7,7 +7,8 @@
 #       format_version: '1.3'
 #       jupytext_version: 1.18.1
 #   kernelspec:
-#     display_name: Python 3
+#     display_name: Python 3 (ipykernel)
+#     language: python
 #     name: python3
 # ---
 
@@ -86,6 +87,8 @@ storage_client = storage.Client(
 )
 
 general_bucket = storage_client.bucket(GENERAL_BUCKET_NAME)
+print(bigquery_client.project)
+print(general_bucket.exists())
 
 # %% id="ugEQEeAtZ1n1"
 # create/reference the bq dataset, and clean all tables
@@ -248,7 +251,7 @@ CREATE TABLE {BQ_DATASET}.bus_stations
   seating BOOLEAN,
   borough STRING,
   latitude FLOAT64,
-  longtitude FLOAT64
+  longitude FLOAT64
 )
 WITH CONNECTION `{PROJECT_ID}.{LOCATION}.{BQ_CONNECTION_NAME}`
 OPTIONS (

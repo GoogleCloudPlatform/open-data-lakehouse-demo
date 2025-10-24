@@ -16,9 +16,9 @@ from pyspark.sql.types import (
 """
 Run this job using 
 ```bash
-gcloud dataproc batches submit pyspark gs://<PROJECT_ID>>-ridership-lakehouse/notebooks_and_code/pyspark-job.py 
+gcloud dataproc batches submit pyspark gs://<PROJECT_ID>>-ridership-lakehouse/assets/pyspark-job.py 
 --region=<REGION>> --subnet=projects/<PROJECT_ID>/regions/<REGION>/subnetworks/<REGION>-open-lakehouse-subnet 
---version=2.3 --files="gs://<PROJECT_ID>-ridership-lakehouse/notebooks_and_code/ivySettings.xml" 
+--version=2.3 --files="gs://<PROJECT_ID>-ridership-lakehouse/assets/ivySettings.xml" 
 --properties=^$^'spark.jars.ivySettings=./ivySettings.xml$spark.jars.packages=org.apache.spark:spark-streaming-kafka
 -0-10_2.13:3.5.1,org.apache.spark:spark-sql-kafka-0-10_2.13:3.5.1,
 com.google.cloud.hosted.kafka:managed-kafka-auth-login-handler:1.0.5' -- 

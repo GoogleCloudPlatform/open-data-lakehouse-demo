@@ -82,7 +82,7 @@ class PySparkService:
 
     @property
     def pyspark_main_file(self) -> str:
-        return f"gs://{self.gcs_main_bucket}/notebooks_and_code/pyspark-job.py"
+        return f"gs://{self.gcs_main_bucket}/code/pyspark-job.py"
 
     # noinspection PyTypeChecker
     def start_pyspark(self, stop_event, retry_count: int = 0):
@@ -100,7 +100,7 @@ class PySparkService:
                     f"--spark-checkpoint-location={self.spark_checkpoint_location}",
                     f"--bigquery-table={self.bigquery_dataset}.{self.bigquery_table}",
                 ],
-                file_uris=[f"gs://{self.gcs_main_bucket}/notebooks_and_code/ivySettings.xml"]
+                file_uris=[f"gs://{self.gcs_main_bucket}/code/ivySettings.xml"]
             ),
             runtime_config=dataproc.RuntimeConfig(
                 version="2.3",
