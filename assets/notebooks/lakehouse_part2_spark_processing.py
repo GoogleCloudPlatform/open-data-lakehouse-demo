@@ -5,7 +5,7 @@
 #       extension: .py
 #       format_name: percent
 #       format_version: '1.3'
-#       jupytext_version: 1.18.1
+#       jupytext_version: 1.14.7
 #   kernelspec:
 #     display_name: Python 3
 #     language: python
@@ -83,20 +83,18 @@ REST_CATALOG_PREFIX = "rest_namespace"
 print(PROJECT_ID)
 
 from google.api_core.client_info import ClientInfo
+
 # %% id="RjO0NIXUemk8"
 from google.cloud import bigquery, storage
 
 # we will use the storage client only for demonstration purposes
 storage_client = storage.Client(
-    project=PROJECT_ID,
-    client_info=ClientInfo(user_agent=USER_AGENT)
+    project=PROJECT_ID, client_info=ClientInfo(user_agent=USER_AGENT)
 )
 
 # we will use the bigquery client to prepare an empty table, backed by apache iceberg parquet format.
 bigquery_client = bigquery.Client(
-    project=PROJECT_ID,
-    location=LOCATION,
-    client_info=ClientInfo(user_agent=USER_AGENT)
+    project=PROJECT_ID, location=LOCATION, client_info=ClientInfo(user_agent=USER_AGENT)
 )
 
 # %% id="rvqNttdsR14g"
@@ -104,28 +102,34 @@ bigquery_client = bigquery.Client(
 
 import pandas as pd
 
-pd.set_option('display.max_colwidth', None)
+pd.set_option("display.max_colwidth", None)
+
 
 def display_blobs_with_prefix(bucket_name: str, prefix: str, top=20):
+    blobs = [
+        [b.name, b.size, b.content_type, b.updated]
+        for b in storage_client.list_blobs(
+            bucket_name,
+            prefix=prefix,
+        )
+    ]
+    df = pd.DataFrame(blobs, columns=["Name", "Size", "Content Type", "Updated"])
+    return df.head(top)
 
-  blobs = [[b.name, b.size, b.content_type, b.updated] for b in
-         storage_client.list_blobs(bucket_name, prefix=prefix, )]
-  df = pd.DataFrame(blobs, columns=["Name", "Size", "Content Type", "Updated"])
-  return df.head(top)
 
 def delete_blobs_with_prefix(bucket_name: str, prefix: str):
-  blobs = storage_client.list_blobs(bucket_name, prefix=prefix)
-  for blob in blobs:
-    blob.delete()
+    blobs = storage_client.list_blobs(bucket_name, prefix=prefix)
+    for blob in blobs:
+        blob.delete()
 
 
-def select_top_rows(table_name: str, num_rows: int=10):
-  query = f"""
+def select_top_rows(table_name: str, num_rows: int = 10):
+    query = f"""
   SELECT *
   FROM `{PROJECT_ID}.{BQ_DATASET}.{table_name}`
   LIMIT {num_rows}
   """
-  return bigquery_client.query(query).to_dataframe()
+    return bigquery_client.query(query).to_dataframe()
 
 
 # %% id="3PfbmvdIsyr_"
@@ -146,36 +150,64 @@ external_catalog = "external_catalog"
 bq_catalog = "bq_catalog"
 
 # here, we're setting the options for the external catalog, where the tables are managed by spark, and read-only for bq
-session.runtime_config.properties[f'spark.sql.catalog.{external_catalog}'] = 'org.apache.iceberg.spark.SparkCatalog'
-session.runtime_config.properties[f'spark.sql.catalog.{external_catalog}.type'] = 'rest'
-session.runtime_config.properties[f'spark.sql.catalog.{external_catalog}.uri'] = 'https://biglake.googleapis.com/iceberg/v1/restcatalog'
-session.runtime_config.properties[f'spark.sql.catalog.{external_catalog}.warehouse'] = f'gs://{REST_CATALOG_BUCKET_NAME}'
-session.runtime_config.properties[f'spark.sql.catalog.{external_catalog}.header.x-goog-user-project'] = PROJECT_ID
-session.runtime_config.properties[f'spark.sql.catalog.{external_catalog}.rest.auth.type'] = 'org.apache.iceberg.gcp.auth.GoogleAuthManager'
-session.runtime_config.properties[f'spark.sql.catalog.{external_catalog}.io-impl'] = 'org.apache.iceberg.gcp.gcs.GCSFileIO'
-session.runtime_config.properties[f'spark.sql.catalog.{external_catalog}.rest-metrics-reporting-enabled'] = 'false'
+session.runtime_config.properties[
+    f"spark.sql.catalog.{external_catalog}"
+] = "org.apache.iceberg.spark.SparkCatalog"
+session.runtime_config.properties[f"spark.sql.catalog.{external_catalog}.type"] = "rest"
+session.runtime_config.properties[
+    f"spark.sql.catalog.{external_catalog}.uri"
+] = "https://biglake.googleapis.com/iceberg/v1/restcatalog"
+session.runtime_config.properties[
+    f"spark.sql.catalog.{external_catalog}.warehouse"
+] = f"gs://{REST_CATALOG_BUCKET_NAME}"
+session.runtime_config.properties[
+    f"spark.sql.catalog.{external_catalog}.header.x-goog-user-project"
+] = PROJECT_ID
+session.runtime_config.properties[
+    f"spark.sql.catalog.{external_catalog}.rest.auth.type"
+] = "org.apache.iceberg.gcp.auth.GoogleAuthManager"
+session.runtime_config.properties[
+    f"spark.sql.catalog.{external_catalog}.io-impl"
+] = "org.apache.iceberg.gcp.gcs.GCSFileIO"
+session.runtime_config.properties[
+    f"spark.sql.catalog.{external_catalog}.rest-metrics-reporting-enabled"
+] = "false"
 
 # here, we're setting the options for the bigquery catalog, where the tables are managed by bigquery, and read-only for spark
-session.runtime_config.properties[f"spark.sql.catalog.{bq_catalog}"] = "org.apache.iceberg.spark.SparkCatalog"
-session.runtime_config.properties[f"spark.sql.catalog.{bq_catalog}.catalog-impl"] = "org.apache.iceberg.gcp.bigquery.BigQueryMetastoreCatalog"
-session.runtime_config.properties[f"spark.sql.catalog.{bq_catalog}.gcp_project"] = PROJECT_ID
-session.runtime_config.properties[f"spark.sql.catalog.{bq_catalog}.gcp_location"] = LOCATION
-session.runtime_config.properties[f"spark.sql.catalog.{bq_catalog}.warehouse"] = f"gs://{BQ_CATALOG_BUCKET_NAME}"
+session.runtime_config.properties[
+    f"spark.sql.catalog.{bq_catalog}"
+] = "org.apache.iceberg.spark.SparkCatalog"
+session.runtime_config.properties[
+    f"spark.sql.catalog.{bq_catalog}.catalog-impl"
+] = "org.apache.iceberg.gcp.bigquery.BigQueryMetastoreCatalog"
+session.runtime_config.properties[
+    f"spark.sql.catalog.{bq_catalog}.gcp_project"
+] = PROJECT_ID
+session.runtime_config.properties[
+    f"spark.sql.catalog.{bq_catalog}.gcp_location"
+] = LOCATION
+session.runtime_config.properties[
+    f"spark.sql.catalog.{bq_catalog}.warehouse"
+] = f"gs://{BQ_CATALOG_BUCKET_NAME}"
 
 # general packages and configuration
-session.runtime_config.properties["spark.jars.packages"] = "org.apache.iceberg:iceberg-spark-runtime-3.5_2.12:1.10.0,org.apache.iceberg:iceberg-gcp-bundle:1.10.0"
-session.runtime_config.properties["spark.jars"] = "https://storage.googleapis.com/spark-lib/bigquery/spark-bigquery-with-dependencies_2.12-0.42.1.jar"
-session.runtime_config.properties["spark.sql.extensions"] = "org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions"
+session.runtime_config.properties[
+    "spark.jars.packages"
+] = "org.apache.iceberg:iceberg-spark-runtime-3.5_2.12:1.10.0,org.apache.iceberg:iceberg-gcp-bundle:1.10.0"
+session.runtime_config.properties[
+    "spark.jars"
+] = "https://storage.googleapis.com/spark-lib/bigquery/spark-bigquery-with-dependencies_2.12-0.42.1.jar"
+session.runtime_config.properties[
+    "spark.sql.extensions"
+] = "org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions"
 
 # Create the Spark session. This will take some time.
 spark = (
-   DataprocSparkSession.builder
-     .appName("simulate-bus-rides")
-
-     .dataprocSessionConfig(session)
-     .getOrCreate()
+    DataprocSparkSession.builder.appName("simulate-bus-rides")
+    .dataprocSessionConfig(session)
+    .getOrCreate()
 )
-spark.conf.set("viewsEnabled","true")
+spark.conf.set("viewsEnabled", "true")
 
 # %% [markdown] id="D5NrjhLyj7me"
 # ## Let's take a look around
@@ -189,7 +221,9 @@ spark.sql(f"SHOW TABLES FROM spark_catalog.{BQ_DATASET};").toPandas()
 
 # %% id="19qzk6NJxKH7"
 # Let's take a closer look at the bus_stations table, that our spark-bigquery-connector sees
-spark.sql(f"DESCRIBE TABLE EXTENDED spark_catalog.{BQ_DATASET}.bus_stations;").toPandas()
+spark.sql(
+    f"DESCRIBE TABLE EXTENDED spark_catalog.{BQ_DATASET}.bus_stations;"
+).toPandas()
 
 # %% id="Dm7m4HR2NZu1"
 # And compare that with the bus_stations table that our BigLake catalog sees
@@ -231,7 +265,9 @@ bus_lines_df.show(5)
 
 # %% id="Bl3iCPGPIANj"
 # To read the bus_stations data, we will use reading directly from bigquery, which uses the underlying bigquery-spark connector and uses bigquery slots to read
-bus_stations_df = spark.read.format("bigquery").load(f"{PROJECT_ID}.{BQ_DATASET}.bus_stations")
+bus_stations_df = spark.read.format("bigquery").load(
+    f"{PROJECT_ID}.{BQ_DATASET}.bus_stations"
+)
 bus_stations_df.printSchema()
 bus_stations_df.show(5)
 
@@ -246,7 +282,7 @@ bus_stations_df.show(5)
 # 1. Calculate min and max transit_timestamp for each station_id
 station_time_summary_df = ridership_df.groupBy("station_id").agg(
     f.min("transit_timestamp").alias("min_station_timestamp"),
-    f.max("transit_timestamp").alias("max_station_timestamp")
+    f.max("transit_timestamp").alias("max_station_timestamp"),
 )
 station_time_summary_df.show(5)
 
@@ -257,9 +293,7 @@ exploded_bus_stops_df = bus_lines_df.withColumn("station_id", f.explode("stops")
 # 3. Join the exploded bus_stops_df with the station_time_summary_df
 # Use a 'left' join to keep all bus lines, even if some of their stops have no ridership data
 bus_lines_with_station_times = exploded_bus_stops_df.join(
-    station_time_summary_df,
-    on="station_id",
-    how="left"
+    station_time_summary_df, on="station_id", how="left"
 )
 
 # 4. Aggregate back by bus_line_id to find the overall min and max timestamp across all its stops
@@ -269,7 +303,7 @@ bus_line_overall_times_df = bus_lines_with_station_times.groupBy("bus_line_id").
     # The maximum of the min_station_timestamp for all stops on the line
     f.max("min_station_timestamp").alias("min_transit_timestamp"),
     # The minimum of the max_station_timestamp for all stops on the line
-    f.min("max_station_timestamp").alias("max_transit_timestamp")
+    f.min("max_station_timestamp").alias("max_transit_timestamp"),
 )
 
 # this will show us for each bus line, the time ranges in which we can simulate rides
@@ -314,7 +348,7 @@ BusRideStructType = t.StructType(
         t.StructField("bus_stop_index", t.IntegerType()),
         t.StructField("num_of_bus_stops", t.IntegerType()),
         t.StructField("last_stop", t.BooleanType()),
-        t.StructField("timestamp_at_stop", t.TimestampType())
+        t.StructField("timestamp_at_stop", t.TimestampType()),
     ]
 )
 
@@ -323,6 +357,7 @@ BUS_SIZE_MAP = {
     "M": (30, 25),
     "L": (40, 30),
 }
+
 
 # Returns a list of bus_rides - this is a standard python function
 # it will be wrapped to be a spark UDF
@@ -340,7 +375,9 @@ def generate_ride_times(row: t.Row) -> List[BusRide]:
     # the inner for loop will execute for each stop in one trip
     while start_time < end_time:
         # new ride id
-        new_bus_ride_id = f"{row.bus_line_id}_{start_time.strftime('%Y-%m-%d_%H-%M-%S')}"
+        new_bus_ride_id = (
+            f"{row.bus_line_id}_{start_time.strftime('%Y-%m-%d_%H-%M-%S')}"
+        )
 
         # some parameters for this bus ride, choosing a size of bus
         bus_size = random.choice(list(BUS_SIZE_MAP.keys()))
@@ -371,7 +408,7 @@ def generate_ride_times(row: t.Row) -> List[BusRide]:
                     i + 1,
                     len(row.stops),
                     i == len(row.stops) - 1,
-                    stop_time
+                    stop_time,
                 )
             )
             # move the stop_time to the next stop by small number of minutes
@@ -385,12 +422,15 @@ def generate_ride_times(row: t.Row) -> List[BusRide]:
         start_time = start_time + timedelta(minutes=trips_count * row.frequency_minutes)
     return rides
 
+
 # wrap our function to be a spark udf
 generate_ride_times_udf = f.udf(generate_ride_times, t.ArrayType(BusRideStructType))
 
 # we now select the call to the UDF, passing in each row, and exploding the output, since it is returning a list/array
 bus_rides = bus_lines_with_min_max.select(
-    f.explode(generate_ride_times_udf(f.struct(*bus_lines_with_min_max.columns))).alias("rides")
+    f.explode(generate_ride_times_udf(f.struct(*bus_lines_with_min_max.columns))).alias(
+        "rides"
+    )
 ).select("rides.*")
 
 bus_rides.show(10)
@@ -404,13 +444,16 @@ bus_rides.show(10)
 # join with the ridership data, by each station_id and the timestamp
 bus_rides_with_ridership = bus_rides.alias("rides").join(
     ridership_df.alias("ridership"),
-     (f.col("rides.bus_stop_id") == f.col("ridership.station_id")) & (f.col("rides.timestamp_at_stop") == f.col("ridership.transit_timestamp")),
-    "inner"
+    (f.col("rides.bus_stop_id") == f.col("ridership.station_id"))
+    & (f.col("rides.timestamp_at_stop") == f.col("ridership.transit_timestamp")),
+    "inner",
 )
 
 # drop redundant columns and rename `ridership` to `passengers_in_stop` for clarity
-bus_rides_with_ridership = bus_rides_with_ridership.drop("transit_timestamp").drop("station_id").withColumnRenamed(
-    "ridership", "passengers_in_stop"
+bus_rides_with_ridership = (
+    bus_rides_with_ridership.drop("transit_timestamp")
+    .drop("station_id")
+    .withColumnRenamed("ridership", "passengers_in_stop")
 )
 # cache this, as this will be used again shortly
 bus_rides_with_ridership.cache()
@@ -438,7 +481,8 @@ import pandas as pd
 # It should include all existing columns from bus_rides_with_ridership
 # plus the new 'passengers_alighting' and 'total_passengers' columns.
 simulated_ride_output_schema = t.StructType(
-    bus_rides_with_ridership.schema.fields + [
+    bus_rides_with_ridership.schema.fields
+    + [
         t.StructField("passengers_alighting", t.LongType(), True),
         t.StructField("passengers_boarding", t.LongType(), True),
         t.StructField("remaining_capacity", t.LongType(), True),
@@ -466,7 +510,9 @@ def calculate_bus_passengers(pdf: pd.DataFrame) -> pd.DataFrame:
     if pdf is None or pdf.empty:
         # Return an empty DataFrame with the exact schema expected by Spark
         # This prevents UnboundLocalError when a group is empty.
-        empty_pdf_data = pd.DataFrame(columns=[c for c in simulated_ride_output_schema.fieldNames])
+        empty_pdf_data = pd.DataFrame(
+            columns=[c for c in simulated_ride_output_schema.fieldNames]
+        )
         return pd.DataFrame(empty_pdf_data)
 
     # Sort the DataFrame by bus_stop_index to ensure correct iterative calculation
@@ -483,7 +529,7 @@ def calculate_bus_passengers(pdf: pd.DataFrame) -> pd.DataFrame:
     # for each bus stop along the ride
     for index, row in pdf.iterrows():
         # If we are at the last stop of this ride, all passengers are alighting and non are boarding
-        if row['last_stop']:
+        if row["last_stop"]:
             passengers_alighting = current_passengers_on_bus
             passengers_boarding = 0
             passengers_in_stop = 0
@@ -492,21 +538,29 @@ def calculate_bus_passengers(pdf: pd.DataFrame) -> pd.DataFrame:
         else:
             # Get passengers trying to board at this stop (passengers_in_stop), treating None as 0
             # not sure they all have room
-            passengers_in_stop = row['passengers_in_stop'] if pd.notnull(row['passengers_in_stop']) else 0
+            passengers_in_stop = (
+                row["passengers_in_stop"]
+                if pd.notnull(row["passengers_in_stop"])
+                else 0
+            )
 
             # Calculate random passengers alighting:
             # It's a random normal distribution, proportional to the passengers in the station (central stations have lots of people coming on and off).
-            potential_alighting = int(np.random.normal(loc=passengers_in_stop, scale=passengers_in_stop / 4))
+            potential_alighting = int(
+                np.random.normal(loc=passengers_in_stop, scale=passengers_in_stop / 4)
+            )
 
             # Ensure alighting passengers do not exceed the number of passengers currently on the bus
             # and also ensure it's not negative.
-            passengers_alighting = max(0, min(potential_alighting, current_passengers_on_bus))
+            passengers_alighting = max(
+                0, min(potential_alighting, current_passengers_on_bus)
+            )
 
             # update the number of passengers on the bus (this will change again soon with the number of boarding passengers)
             current_passengers_on_bus = current_passengers_on_bus - passengers_alighting
 
             # Calculate the number of passengers currently on the bus after alighting
-            temporary_capacity = row['total_capacity'] - current_passengers_on_bus
+            temporary_capacity = row["total_capacity"] - current_passengers_on_bus
 
             # actual passengers on bus is the lower number from our remaining capacity after boarding, and people at the stop
             # meaning, that we will take all the passengers waiting, if we can.
@@ -521,22 +575,23 @@ def calculate_bus_passengers(pdf: pd.DataFrame) -> pd.DataFrame:
         alighting_passengers_list.append(passengers_alighting)
         total_passengers_list.append(current_passengers_on_bus)
         passengers_boarding_list.append(passengers_boarding)
-        remainig_capacity_list.append(row['total_capacity'] - current_passengers_on_bus)
+        remainig_capacity_list.append(row["total_capacity"] - current_passengers_on_bus)
         remaining_at_stop_list.append(remaining_at_stop)
 
     # Add the new columns to the pandas DataFrame
-    pdf['passengers_alighting'] = alighting_passengers_list
-    pdf['total_passengers'] = total_passengers_list
-    pdf['passengers_boarding'] = passengers_boarding_list
-    pdf['remaining_capacity'] = remainig_capacity_list
-    pdf['remaining_at_stop'] = remaining_at_stop_list
+    pdf["passengers_alighting"] = alighting_passengers_list
+    pdf["total_passengers"] = total_passengers_list
+    pdf["passengers_boarding"] = passengers_boarding_list
+    pdf["remaining_capacity"] = remainig_capacity_list
+    pdf["remaining_at_stop"] = remaining_at_stop_list
     return pdf
+
 
 # Apply the Pandas UDF to the bus_rides_with_ridership DataFrame
 # Group by bus_ride_id to apply the simulation independently for each ride
-bus_rides_with_riders_and_totals = bus_rides_with_ridership.groupBy("bus_ride_id").applyInPandas(
-    calculate_bus_passengers, schema=simulated_ride_output_schema
-)
+bus_rides_with_riders_and_totals = bus_rides_with_ridership.groupBy(
+    "bus_ride_id"
+).applyInPandas(calculate_bus_passengers, schema=simulated_ride_output_schema)
 
 bus_rides_with_riders_and_totals.show(10, truncate=False)
 bus_rides_with_riders_and_totals.printSchema()
@@ -549,7 +604,9 @@ TABLE_NAME = "bus_rides"
 
 # drop an existing table, if needed
 bus_rides_prefix = f"{BQ_CATALOG_PREFIX}/{TABLE_NAME}"
-bigquery_client.delete_table(f"{PROJECT_ID}.{BQ_DATASET}.{TABLE_NAME}", not_found_ok=True)
+bigquery_client.delete_table(
+    f"{PROJECT_ID}.{BQ_DATASET}.{TABLE_NAME}", not_found_ok=True
+)
 delete_blobs_with_prefix(BQ_CATALOG_BUCKET_NAME, bus_rides_prefix)
 display_blobs_with_prefix(BQ_CATALOG_BUCKET_NAME, bus_rides_prefix)
 
@@ -583,11 +640,9 @@ display_blobs_with_prefix(BQ_CATALOG_BUCKET_NAME, bus_rides_prefix)
 
 # %% id="_V342-bis5qQ"
 # save the bus_rides_with_riders_and_totals dataframe to bigquery, with iceberg format
-bus_rides_with_riders_and_totals.write \
-    .format("bigquery") \
-    .mode("overwrite") \
-    .option("table", f"{PROJECT_ID}.{BQ_DATASET}.{TABLE_NAME}") \
-    .save()
+bus_rides_with_riders_and_totals.write.format("bigquery").mode("overwrite").option(
+    "table", f"{PROJECT_ID}.{BQ_DATASET}.{TABLE_NAME}"
+).save()
 
 
 # %% id="LSZcQp_6aFgL"

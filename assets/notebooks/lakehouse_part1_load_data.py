@@ -5,7 +5,7 @@
 #       extension: .py
 #       format_name: percent
 #       format_version: '1.3'
-#       jupytext_version: 1.16.2
+#       jupytext_version: 1.14.7
 #   kernelspec:
 #     display_name: Python 3 (ipykernel)
 #     language: python
@@ -77,13 +77,10 @@ from google.cloud import bigquery, storage
 from google.api_core.client_info import ClientInfo
 
 bigquery_client = bigquery.Client(
-    project=PROJECT_ID,
-    location=LOCATION,
-    client_info=ClientInfo(user_agent=USER_AGENT)
+    project=PROJECT_ID, location=LOCATION, client_info=ClientInfo(user_agent=USER_AGENT)
 )
 storage_client = storage.Client(
-    project=PROJECT_ID,
-    client_info=ClientInfo(user_agent=USER_AGENT)
+    project=PROJECT_ID, client_info=ClientInfo(user_agent=USER_AGENT)
 )
 
 general_bucket = storage_client.bucket(GENERAL_BUCKET_NAME)
@@ -109,28 +106,34 @@ for table in bigquery_client.list_tables(dataset):
 
 import pandas as pd
 
-pd.set_option('display.max_colwidth', None)
+pd.set_option("display.max_colwidth", None)
+
 
 def display_blobs_with_prefix(bucket_name: str, prefix: str, top=20):
+    blobs = [
+        [b.name, b.size, b.content_type, b.updated]
+        for b in storage_client.list_blobs(
+            bucket_name,
+            prefix=prefix,
+        )
+    ]
+    df = pd.DataFrame(blobs, columns=["Name", "Size", "Content Type", "Updated"])
+    return df.head(top)
 
-  blobs = [[b.name, b.size, b.content_type, b.updated] for b in
-         storage_client.list_blobs(bucket_name, prefix=prefix, )]
-  df = pd.DataFrame(blobs, columns=["Name", "Size", "Content Type", "Updated"])
-  return df.head(top)
 
 def delete_blobs_with_prefix(bucket_name: str, prefix: str):
-  blobs = storage_client.list_blobs(bucket_name, prefix=prefix)
-  for blob in blobs:
-    blob.delete()
+    blobs = storage_client.list_blobs(bucket_name, prefix=prefix)
+    for blob in blobs:
+        blob.delete()
 
 
-def select_top_rows(table_name: str, num_rows: int=10):
-  query = f"""
+def select_top_rows(table_name: str, num_rows: int = 10):
+    query = f"""
   SELECT *
   FROM `{PROJECT_ID}.{BQ_DATASET}.{table_name}`
   LIMIT {num_rows}
   """
-  return bigquery_client.query(query).to_dataframe()
+    return bigquery_client.query(query).to_dataframe()
 
 
 # %% [markdown] id="z2TGzD069Kwp"
@@ -269,7 +272,12 @@ display_blobs_with_prefix(BQ_CATALOG_BUCKET_NAME, bus_stops_prefix)
 import json
 
 # Let's review the metadata file that we have
-file = list(storage_client.list_blobs(BQ_CATALOG_BUCKET_NAME, match_glob=f"{bus_stops_prefix}/metadata/*.metadata.json"))[0]
+file = list(
+    storage_client.list_blobs(
+        BQ_CATALOG_BUCKET_NAME,
+        match_glob=f"{bus_stops_prefix}/metadata/*.metadata.json",
+    )
+)[0]
 metadata = file.download_as_string()
 print(json.loads(metadata.decode("utf-8")))
 
@@ -313,7 +321,12 @@ display_blobs_with_prefix(BQ_CATALOG_BUCKET_NAME, bus_stops_prefix)
 # The `v0.metadata.json` file, which can have other prefixes, contains the important info for this version of the table. Let's take a quick look at this file.
 
 # %% id="Xs0MIDDxYLjI"
-file = list(storage_client.list_blobs(BQ_CATALOG_BUCKET_NAME, match_glob=f"{bus_stops_prefix}/metadata/*.metadata.json"))[0]
+file = list(
+    storage_client.list_blobs(
+        BQ_CATALOG_BUCKET_NAME,
+        match_glob=f"{bus_stops_prefix}/metadata/*.metadata.json",
+    )
+)[0]
 metadata = file.download_as_string()
 print(json.loads(metadata.decode("utf-8")))
 
@@ -347,9 +360,15 @@ display_blobs_with_prefix(BQ_CATALOG_BUCKET_NAME, bus_stops_prefix + "/metadata"
 # %%
 from pprint import pprint
 
-all_metadata_blobs = list(storage_client.list_blobs(BQ_CATALOG_BUCKET_NAME, match_glob=f"{bus_stops_prefix}/metadata/*"))
+all_metadata_blobs = list(
+    storage_client.list_blobs(
+        BQ_CATALOG_BUCKET_NAME, match_glob=f"{bus_stops_prefix}/metadata/*"
+    )
+)
 
-version_hint_blob = list(filter(lambda x: x.name.endswith("version-hint.text"), all_metadata_blobs))[0]
+version_hint_blob = list(
+    filter(lambda x: x.name.endswith("version-hint.text"), all_metadata_blobs)
+)[0]
 version_hint = version_hint_blob.download_as_string().decode("utf-8")
 
 # The version hint just has the right version, so now we know which json file to look for
@@ -357,7 +376,11 @@ print(f"Latest Version of metadata: {version_hint}")
 print("")
 print("-" * 20)
 
-latest_json_file = list(filter(lambda x: x.name.endswith(f"v{version_hint}.metadata.json"), all_metadata_blobs))[0]
+latest_json_file = list(
+    filter(
+        lambda x: x.name.endswith(f"v{version_hint}.metadata.json"), all_metadata_blobs
+    )
+)[0]
 latest_json = json.loads(latest_json_file.download_as_string().decode("utf-8"))
 print(f"Latest metadata from our file metadata (v{version_hint}.metadata.json):")
 print("")
@@ -370,12 +393,15 @@ pprint(latest_json)
 # but not the other. Let's take a look at the manifest-list file
 
 import fastavro
-manifest_list_file = list(filter(lambda x: "manifest-list-000" in x.name, all_metadata_blobs))[0]
 
-with manifest_list_file.open('rb') as fo:
-  avro_reader = fastavro.reader(fo)
-  for record in avro_reader:
-    pprint(record)
+manifest_list_file = list(
+    filter(lambda x: "manifest-list-000" in x.name, all_metadata_blobs)
+)[0]
+
+with manifest_list_file.open("rb") as fo:
+    avro_reader = fastavro.reader(fo)
+    for record in avro_reader:
+        pprint(record)
 
 # %% id="Aixw99UVu-9f"
 # We can see the metadata that was generated when we loaded the data through BigQuery
@@ -384,12 +410,17 @@ with manifest_list_file.open('rb') as fo:
 
 # we also see a reference to the other avro file - so let's take a look there:
 
-avro_file = list(filter(lambda x: "manifest-list-000" not in x.name and x.name.endswith(".avro"), all_metadata_blobs))[0]
+avro_file = list(
+    filter(
+        lambda x: "manifest-list-000" not in x.name and x.name.endswith(".avro"),
+        all_metadata_blobs,
+    )
+)[0]
 
-with avro_file.open('rb') as fo:
-  avro_reader = fastavro.reader(fo)
-  for record in avro_reader:
-    pprint(record)
+with avro_file.open("rb") as fo:
+    avro_reader = fastavro.reader(fo)
+    for record in avro_reader:
+        pprint(record)
 
 # %% [markdown] id="ofBoYgs90zqI"
 # So, now the picture is complete - this is how Apache iceberg can keep track on all the data in our table. We can see each data file listed here, with some metadata.
@@ -417,6 +448,7 @@ with avro_file.open('rb') as fo:
 
 # %% id="GH9LHM82Vmez"
 import json
+
 # access_token = !gcloud auth application-default print-access-token
 access_token = access_token[0]
 
@@ -439,24 +471,39 @@ session = Session()
 
 catalog_name = "external_catalog"
 
-session.runtime_config.properties[f'spark.sql.catalog.{catalog_name}'] = 'org.apache.iceberg.spark.SparkCatalog'
-session.runtime_config.properties[f'spark.sql.catalog.{catalog_name}.type'] = 'rest'
-session.runtime_config.properties[f'spark.sql.catalog.{catalog_name}.uri'] = 'https://biglake.googleapis.com/iceberg/v1/restcatalog'
-session.runtime_config.properties[f'spark.sql.catalog.{catalog_name}.warehouse'] = f'gs://{REST_CATALOG_BUCKET_NAME}'
-session.runtime_config.properties[f'spark.sql.catalog.{catalog_name}.header.x-goog-user-project'] = PROJECT_ID
-session.runtime_config.properties[f'spark.sql.catalog.{catalog_name}.rest.auth.type'] = 'org.apache.iceberg.gcp.auth.GoogleAuthManager'
-session.runtime_config.properties[f'spark.sql.catalog.{catalog_name}.io-impl'] = 'org.apache.iceberg.gcp.gcs.GCSFileIO'
-session.runtime_config.properties[f'spark.sql.catalog.{catalog_name}.rest-metrics-reporting-enabled'] = 'false'
-session.runtime_config.properties['spark.sql.extensions'] = 'org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions'
-session.runtime_config.properties['spark.sql.defaultCatalog'] = catalog_name
+session.runtime_config.properties[
+    f"spark.sql.catalog.{catalog_name}"
+] = "org.apache.iceberg.spark.SparkCatalog"
+session.runtime_config.properties[f"spark.sql.catalog.{catalog_name}.type"] = "rest"
+session.runtime_config.properties[
+    f"spark.sql.catalog.{catalog_name}.uri"
+] = "https://biglake.googleapis.com/iceberg/v1/restcatalog"
+session.runtime_config.properties[
+    f"spark.sql.catalog.{catalog_name}.warehouse"
+] = f"gs://{REST_CATALOG_BUCKET_NAME}"
+session.runtime_config.properties[
+    f"spark.sql.catalog.{catalog_name}.header.x-goog-user-project"
+] = PROJECT_ID
+session.runtime_config.properties[
+    f"spark.sql.catalog.{catalog_name}.rest.auth.type"
+] = "org.apache.iceberg.gcp.auth.GoogleAuthManager"
+session.runtime_config.properties[
+    f"spark.sql.catalog.{catalog_name}.io-impl"
+] = "org.apache.iceberg.gcp.gcs.GCSFileIO"
+session.runtime_config.properties[
+    f"spark.sql.catalog.{catalog_name}.rest-metrics-reporting-enabled"
+] = "false"
+session.runtime_config.properties[
+    "spark.sql.extensions"
+] = "org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions"
+session.runtime_config.properties["spark.sql.defaultCatalog"] = catalog_name
 
 
 # Create the Spark session. This will take some time.
 spark: DataprocSparkSession = (
-    DataprocSparkSession.builder
-      .appName("mount-bus-lines")
-      .dataprocSessionConfig(session)
-      .getOrCreate()
+    DataprocSparkSession.builder.appName("mount-bus-lines")
+    .dataprocSessionConfig(session)
+    .getOrCreate()
 )
 
 # %%
@@ -465,10 +512,14 @@ spark.sql(f"CREATE NAMESPACE IF NOT EXISTS `{REST_CATALOG_PREFIX}`;")
 spark.sql(f"USE `{REST_CATALOG_PREFIX}`;")
 
 # Read the staged data from the original bucket
-df = spark.read.format("parquet").load(f"gs://{GENERAL_BUCKET_NAME}/staged-data/bus_lines/")
+df = spark.read.format("parquet").load(
+    f"gs://{GENERAL_BUCKET_NAME}/staged-data/bus_lines/"
+)
 
 # and write it back to the Iceberg catalog as a table.
-df.write.format("iceberg").mode("overwrite").saveAsTable(f"{REST_CATALOG_PREFIX}.bus_lines")
+df.write.format("iceberg").mode("overwrite").saveAsTable(
+    f"{REST_CATALOG_PREFIX}.bus_lines"
+)
 
 
 # %% id="H77pWZzhYjZ0"
@@ -488,16 +539,23 @@ display_blobs_with_prefix(REST_CATALOG_BUCKET_NAME, REST_CATALOG_PREFIX)
 # Now, we just need to "mount" the `bus_lines` Iceberg Data in BigQuery:
 
 # %% id="9kxivahUxGPe"
-metadata_blob = list(storage_client.list_blobs(REST_CATALOG_BUCKET_NAME, match_glob=f"{REST_CATALOG_PREFIX}/bus_lines/metadata/*.metadata.json"))[0]
+metadata_blob = list(
+    storage_client.list_blobs(
+        REST_CATALOG_BUCKET_NAME,
+        match_glob=f"{REST_CATALOG_PREFIX}/bus_lines/metadata/*.metadata.json",
+    )
+)[0]
 
-bigquery_client.query(f"""
+bigquery_client.query(
+    f"""
 CREATE OR REPLACE EXTERNAL TABLE `{BQ_DATASET}.bus_lines`
   WITH CONNECTION `{PROJECT_ID}.{LOCATION}.{BQ_CONNECTION_NAME}`
   OPTIONS (
          format = 'ICEBERG',
          uris = ["gs://{REST_CATALOG_BUCKET_NAME}/{metadata_blob.name}"]
    )
-""").result()
+"""
+).result()
 
 # %% id="QOgaM-h_GNix"
 # show sample rows
@@ -519,9 +577,7 @@ ridership_uri = f"gs://{BQ_CATALOG_BUCKET_NAME}/{ridership_prefix}"
 
 delete_blobs_with_prefix(BQ_CATALOG_BUCKET_NAME, ridership_prefix)
 
-bigquery_client.query(
-    f'DROP TABLE IF EXISTS {BQ_DATASET}.ridership;'
-).result()
+bigquery_client.query(f"DROP TABLE IF EXISTS {BQ_DATASET}.ridership;").result()
 
 _create_table_stmt = f"""
     CREATE TABLE {BQ_DATASET}.ridership (

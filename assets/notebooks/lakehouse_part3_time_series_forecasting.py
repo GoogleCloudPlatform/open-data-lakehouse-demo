@@ -5,7 +5,7 @@
 #       extension: .py
 #       format_name: percent
 #       format_version: '1.3'
-#       jupytext_version: 1.18.1
+#       jupytext_version: 1.14.7
 #   kernelspec:
 #     display_name: Python 3
 #     language: python
@@ -60,17 +60,15 @@ REST_CATALOG_PREFIX = "rest_namespace"
 print(PROJECT_ID)
 
 from google.api_core.client_info import ClientInfo
+
 # %% id="NXsTs1pda7rF"
 from google.cloud import bigquery, storage
 
 bigquery_client = bigquery.Client(
-    project=PROJECT_ID,
-    location=LOCATION,
-    client_info=ClientInfo(user_agent=USER_AGENT)
+    project=PROJECT_ID, location=LOCATION, client_info=ClientInfo(user_agent=USER_AGENT)
 )
 storage_client = storage.Client(
-    project=PROJECT_ID,
-    client_info=ClientInfo(user_agent=USER_AGENT)
+    project=PROJECT_ID, client_info=ClientInfo(user_agent=USER_AGENT)
 )
 
 # %% id="QdvGeeLjgi0N"
@@ -78,28 +76,34 @@ storage_client = storage.Client(
 
 import pandas as pd
 
-pd.set_option('display.max_colwidth', None)
+pd.set_option("display.max_colwidth", None)
+
 
 def display_blobs_with_prefix(bucket_name: str, prefix: str, top=20):
+    blobs = [
+        [b.name, b.size, b.content_type, b.updated]
+        for b in storage_client.list_blobs(
+            bucket_name,
+            prefix=prefix,
+        )
+    ]
+    df = pd.DataFrame(blobs, columns=["Name", "Size", "Content Type", "Updated"])
+    return df.head(top)
 
-  blobs = [[b.name, b.size, b.content_type, b.updated] for b in
-         storage_client.list_blobs(bucket_name, prefix=prefix, )]
-  df = pd.DataFrame(blobs, columns=["Name", "Size", "Content Type", "Updated"])
-  return df.head(top)
 
 def delete_blobs_with_prefix(bucket_name: str, prefix: str):
-  blobs = storage_client.list_blobs(bucket_name, prefix=prefix)
-  for blob in blobs:
-    blob.delete()
+    blobs = storage_client.list_blobs(bucket_name, prefix=prefix)
+    for blob in blobs:
+        blob.delete()
 
 
-def select_top_rows(table_name: str, num_rows: int=10):
-  query = f"""
+def select_top_rows(table_name: str, num_rows: int = 10):
+    query = f"""
   SELECT *
   FROM `{PROJECT_ID}.{BQ_DATASET}.{table_name}`
   LIMIT {num_rows}
   """
-  return bigquery_client.query(query).to_dataframe()
+    return bigquery_client.query(query).to_dataframe()
 
 
 # %% [markdown] id="4ZeA3dCQPpVE"
@@ -112,7 +116,7 @@ def select_top_rows(table_name: str, num_rows: int=10):
 #   * Borough
 #   * Bus line
 #   * Date and time (time series)
-#   
+#
 #   We will use the data generated in notebooks 1 & 2 to forecast ridership, based on these four factors.
 #
 #   Obviously, a couple of these variables are related (the station and borough are related). In a real-world scenario, this could be considered a bad practice, and lead to overfitting towards a specific variable.
@@ -126,7 +130,9 @@ prefix = f"{BQ_CATALOG_PREFIX}/{FEATURES_TABLE_NAME}"
 
 ridership_features_uri = f"gs://{BQ_CATALOG_BUCKET_NAME}/{prefix}/"
 
-bigquery_client.query(f"DROP TABLE IF EXISTS {BQ_DATASET}.{FEATURES_TABLE_NAME};").result()
+bigquery_client.query(
+    f"DROP TABLE IF EXISTS {BQ_DATASET}.{FEATURES_TABLE_NAME};"
+).result()
 delete_blobs_with_prefix(BQ_CATALOG_BUCKET_NAME, prefix)
 
 query = f"""
@@ -183,8 +189,9 @@ import random
 
 DAYS_BACK = 90
 
-demand_per_bus_line_df = bigquery_client.query(
-    f"""
+demand_per_bus_line_df = (
+    bigquery_client.query(
+        f"""
 DECLARE max_ts TIMESTAMP DEFAULT (SELECT MAX(timestamp_at_stop) FROM {BQ_DATASET}.{FEATURES_TABLE_NAME});
 SELECT bus_line, timestamp_at_stop as timestamp_at_stop, AVG(demand_metric) AS demand_metric
   FROM `{BQ_DATASET}.{FEATURES_TABLE_NAME}`
@@ -192,7 +199,10 @@ SELECT bus_line, timestamp_at_stop as timestamp_at_stop, AVG(demand_metric) AS d
   GROUP BY bus_line, timestamp_at_stop
   ORDER BY bus_line, timestamp_at_stop;
 """
-).result().to_dataframe()
+    )
+    .result()
+    .to_dataframe()
+)
 
 random.seed(42)
 
@@ -200,19 +210,23 @@ random.seed(42)
 bus_line_ids = random.sample(list(demand_per_bus_line_df.bus_line.unique()), k=20)
 
 figure = plt.figure(figsize=(20, 6))
-plt.xlabel('Timestamp at stop')
+plt.xlabel("Timestamp at stop")
 # Group data by station ID
 for bus_line_id in bus_line_ids:
-    station_data = demand_per_bus_line_df[demand_per_bus_line_df['bus_line'] == bus_line_id].sort_values(
-        by="timestamp_at_stop"
-    )
+    station_data = demand_per_bus_line_df[
+        demand_per_bus_line_df["bus_line"] == bus_line_id
+    ].sort_values(by="timestamp_at_stop")
     # Plot ridership over time for the current bus line
-    plt.bar(station_data['timestamp_at_stop'], station_data['demand_metric'], label=bus_line_id)
+    plt.bar(
+        station_data["timestamp_at_stop"],
+        station_data["demand_metric"],
+        label=bus_line_id,
+    )
 
 # Customize the plot
-plt.xlabel('Timestamp at stop')
-plt.ylabel('Remaining Passengers')
-plt.title('Remaining Passengers Over Time by Bus Line')
+plt.xlabel("Timestamp at stop")
+plt.ylabel("Remaining Passengers")
+plt.title("Remaining Passengers Over Time by Bus Line")
 plt.legend()
 plt.xticks(rotation=45)
 plt.tight_layout()
@@ -221,8 +235,9 @@ plt.show()
 # %% id="r9yRT9ZwH5U6"
 DAYS_BACK = 90
 
-demand_per_bus_stop_df = bigquery_client.query(
-    f"""
+demand_per_bus_stop_df = (
+    bigquery_client.query(
+        f"""
 DECLARE max_ts TIMESTAMP DEFAULT (SELECT MAX(timestamp_at_stop) FROM {BQ_DATASET}.{FEATURES_TABLE_NAME});
 SELECT bus_stop_id, timestamp_at_stop as timestamp_at_stop, AVG(demand_metric) AS demand_metric
   FROM `{BQ_DATASET}.{FEATURES_TABLE_NAME}`
@@ -230,7 +245,10 @@ SELECT bus_stop_id, timestamp_at_stop as timestamp_at_stop, AVG(demand_metric) A
   GROUP BY bus_stop_id, timestamp_at_stop
   ORDER BY bus_stop_id, timestamp_at_stop;
 """
-).result().to_dataframe()
+    )
+    .result()
+    .to_dataframe()
+)
 
 random.seed(42)
 
@@ -238,19 +256,23 @@ random.seed(42)
 bus_stop_ids = random.sample(list(demand_per_bus_stop_df.bus_stop_id.unique()), k=20)
 
 figure = plt.figure(figsize=(20, 6))
-plt.xlabel('Timestamp at stop')
+plt.xlabel("Timestamp at stop")
 # Group data by station ID
 for bus_stop_id in bus_stop_ids:
-    station_data = demand_per_bus_stop_df[demand_per_bus_stop_df['bus_stop_id'] == bus_stop_id].sort_values(
-        by="timestamp_at_stop"
-    )
+    station_data = demand_per_bus_stop_df[
+        demand_per_bus_stop_df["bus_stop_id"] == bus_stop_id
+    ].sort_values(by="timestamp_at_stop")
     # Plot ridership over time for the current station
-    plt.bar(station_data['timestamp_at_stop'], station_data['demand_metric'], label=bus_stop_id)
+    plt.bar(
+        station_data["timestamp_at_stop"],
+        station_data["demand_metric"],
+        label=bus_stop_id,
+    )
 
 # Customize the plot
-plt.xlabel('Timestamp at stop')
-plt.ylabel('Demand')
-plt.title('Demand Over Time by Bus Stop')
+plt.xlabel("Timestamp at stop")
+plt.ylabel("Demand")
+plt.title("Demand Over Time by Bus Stop")
 plt.legend()
 plt.xticks(rotation=45)
 plt.tight_layout()
@@ -261,8 +283,9 @@ plt.show()
 
 # %% id="ld9h94TofKOZ"
 
-average_demand_per_borough = bigquery_client.query(
-    f"""
+average_demand_per_borough = (
+    bigquery_client.query(
+        f"""
 SELECT
   borough,
   APPROX_QUANTILES(demand_metric, 100)[OFFSET(0)] AS whislo,
@@ -274,19 +297,25 @@ SELECT
  FROM `{BQ_DATASET}`.`{FEATURES_TABLE_NAME}`
  GROUP BY borough
 """
-).result().to_dataframe()
+    )
+    .result()
+    .to_dataframe()
+)
 
-lst_of_dicts = average_demand_per_borough.to_dict(orient='records')
+lst_of_dicts = average_demand_per_borough.to_dict(orient="records")
 fig, ax = plt.subplots()
 
 ax.bxp(
-    lst_of_dicts, showfliers=False, showmeans=True,
-    label=[x["borough"] for x in lst_of_dicts], meanline=True
+    lst_of_dicts,
+    showfliers=False,
+    showmeans=True,
+    label=[x["borough"] for x in lst_of_dicts],
+    meanline=True,
 )
 ax.set_xticklabels([x["borough"] for x in lst_of_dicts])
 
-plt.ylabel('Demand')
-plt.title('Demand Per Borough')
+plt.ylabel("Demand")
+plt.title("Demand Per Borough")
 
 plt.show()
 
@@ -295,8 +324,9 @@ plt.show()
 
 # %% id="G-5DC96y03uE"
 # Calculate average demand per calendar month
-average_demand_per_month = bigquery_client.query(
-    f"""
+average_demand_per_month = (
+    bigquery_client.query(
+        f"""
 SELECT
   EXTRACT(MONTH FROM timestamp_at_stop) AS transit_month,
   AVG(demand_metric) AS demand_metric
@@ -305,21 +335,30 @@ FROM
 GROUP BY
   transit_month;
 """
-).result().to_dataframe()
+    )
+    .result()
+    .to_dataframe()
+)
 
 # Sort by month to ensure correct chronological order in the plot
-average_demand_per_month = average_demand_per_month.sort_values(by='transit_month').reset_index()
+average_demand_per_month = average_demand_per_month.sort_values(
+    by="transit_month"
+).reset_index()
 
-plt.figure(figsize=(10, 6)) # Adjust figure size
+plt.figure(figsize=(10, 6))  # Adjust figure size
 
-plt.bar(average_demand_per_month['transit_month'], average_demand_per_month['demand_metric'])
+plt.bar(
+    average_demand_per_month["transit_month"], average_demand_per_month["demand_metric"]
+)
 
 # Add plot labels and title
 plt.xlabel("Transit Month")
 plt.ylabel("Average Demand")
 plt.title("Average Demand per Month")
-plt.xticks(average_demand_per_month['transit_month'])  # Ensure all months are shown on x-axis
-plt.grid(True, linestyle='--', alpha=0.6)
+plt.xticks(
+    average_demand_per_month["transit_month"]
+)  # Ensure all months are shown on x-axis
+plt.grid(True, linestyle="--", alpha=0.6)
 plt.tight_layout()
 plt.show()
 
@@ -329,8 +368,9 @@ plt.show()
 
 # %% id="FBbFMM971nYk"
 # Group average demand by day of week
-average_demand_per_day_of_week = bigquery_client.query(
-    f"""
+average_demand_per_day_of_week = (
+    bigquery_client.query(
+        f"""
 SELECT
   EXTRACT(DAYOFWEEK FROM timestamp_at_stop) AS transit_day_of_week,
   AVG(demand_metric) AS demand_metric
@@ -339,10 +379,15 @@ FROM
 GROUP BY
   transit_day_of_week;
 """
-).result().to_dataframe()
+    )
+    .result()
+    .to_dataframe()
+)
 
 # Sort by month to ensure correct chronological order in the plot
-average_demand_per_day_of_week = average_demand_per_day_of_week.sort_values(by='transit_day_of_week').reset_index()
+average_demand_per_day_of_week = average_demand_per_day_of_week.sort_values(
+    by="transit_day_of_week"
+).reset_index()
 
 days_of_week = {
     1: "Sunday",
@@ -351,21 +396,26 @@ days_of_week = {
     4: "Wednesday",
     5: "Thursday",
     6: "Friday",
-    7: "Saturday"
+    7: "Saturday",
 }
-average_demand_per_day_of_week['transit_day_of_week'] = average_demand_per_day_of_week['transit_day_of_week'].map(
-    days_of_week
-)
+average_demand_per_day_of_week["transit_day_of_week"] = average_demand_per_day_of_week[
+    "transit_day_of_week"
+].map(days_of_week)
 plt.figure(figsize=(10, 6))  # Adjust figure size
 
-plt.bar(average_demand_per_day_of_week['transit_day_of_week'], average_demand_per_day_of_week['demand_metric'])
+plt.bar(
+    average_demand_per_day_of_week["transit_day_of_week"],
+    average_demand_per_day_of_week["demand_metric"],
+)
 
 # Add plot labels and title
 plt.xlabel("Transit Day of Week")
 plt.ylabel("Average Demand")
 plt.title("Average Demand per Day of Week")
-plt.xticks(average_demand_per_day_of_week['transit_day_of_week'])  # Ensure all months are shown on x-axis
-plt.grid(True, linestyle='--', alpha=0.6)
+plt.xticks(
+    average_demand_per_day_of_week["transit_day_of_week"]
+)  # Ensure all months are shown on x-axis
+plt.grid(True, linestyle="--", alpha=0.6)
 plt.tight_layout()
 plt.show()
 
@@ -537,7 +587,7 @@ SELECT * FROM ML.FORECAST (
     )
   )
 """
-#print(query)
+# print(query)
 bigquery_client.query(query).result()
 select_top_rows(ARIMA_PLUS_XREG_FORECAST_TABLE_NAME)
 
@@ -752,24 +802,43 @@ actual_vs_forecast_df.head()
 
 # %% id="M53P0GpL-XjL"
 # Aggregate data for plotting
-plot_df = actual_vs_forecast_df.groupby('time_bucket').agg(
-    {
-        'observed_value': 'mean',
-        'timesfm_forecast_value': 'mean',
-        'arima_forecast': 'mean'
-    }
-).reset_index()
+plot_df = (
+    actual_vs_forecast_df.groupby("time_bucket")
+    .agg(
+        {
+            "observed_value": "mean",
+            "timesfm_forecast_value": "mean",
+            "arima_forecast": "mean",
+        }
+    )
+    .reset_index()
+)
 
 # Create the plot
 plt.figure(figsize=(15, 7))
-plt.plot(plot_df['time_bucket'], plot_df['observed_value'], label='Observed Value', marker='o')
-plt.plot(plot_df['time_bucket'], plot_df['timesfm_forecast_value'], label='TimesFM Forecast', marker='x')
-plt.plot(plot_df['time_bucket'], plot_df['arima_forecast'], label='ARIMA Forecast', marker='s')
+plt.plot(
+    plot_df["time_bucket"],
+    plot_df["observed_value"],
+    label="Observed Value",
+    marker="o",
+)
+plt.plot(
+    plot_df["time_bucket"],
+    plot_df["timesfm_forecast_value"],
+    label="TimesFM Forecast",
+    marker="x",
+)
+plt.plot(
+    plot_df["time_bucket"],
+    plot_df["arima_forecast"],
+    label="ARIMA Forecast",
+    marker="s",
+)
 
 # Customize the plot
-plt.xlabel('Time Bucket')
-plt.ylabel('Value')
-plt.title('Observed vs. Forecasted Values Over Time')
+plt.xlabel("Time Bucket")
+plt.ylabel("Value")
+plt.title("Observed vs. Forecasted Values Over Time")
 plt.legend()
 plt.xticks(rotation=45)
 plt.grid(True)

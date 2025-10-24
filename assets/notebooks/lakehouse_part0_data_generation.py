@@ -5,14 +5,14 @@
 #       extension: .py
 #       format_name: percent
 #       format_version: '1.3'
-#       jupytext_version: 1.18.1
+#       jupytext_version: 1.14.7
 #   kernelspec:
 #     display_name: Python 3 (ipykernel)
 #     language: python
 #     name: python3
 # ---
 
-# %% id="VWe8czCUjv5V" executionInfo={"status": "ok", "timestamp": 1758537292149, "user_tz": -120, "elapsed": 7, "user": {"displayName": "", "userId": ""}}
+# %% executionInfo={"elapsed": 7, "status": "ok", "timestamp": 1758537292149, "user": {"displayName": "", "userId": ""}, "user_tz": -120} id="VWe8czCUjv5V"
 # Copyright 2025 Google LLC
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -43,8 +43,9 @@
 # %% [markdown] id="vblA"
 # ## Setup the environment
 
-# %% id="bkHC" colab={"base_uri": "https://localhost:8080/"} executionInfo={"status": "ok", "timestamp": 1758537293559, "user_tz": -120, "elapsed": 1416, "user": {"displayName": "", "userId": ""}} outputId="8d2e432b-2af8-40e6-b8a1-a3ce1a849d1a"
+# %% colab={"base_uri": "https://localhost:8080/"} executionInfo={"elapsed": 1416, "status": "ok", "timestamp": 1758537293559, "user": {"displayName": "", "userId": ""}, "user_tz": -120} id="bkHC" outputId="8d2e432b-2af8-40e6-b8a1-a3ce1a849d1a"
 import os
+
 USER_AGENT = "cloud-solutions/data-to-ai-nb-v3"
 
 # PROJECT_ID = !gcloud config get-value project
@@ -57,26 +58,23 @@ BQ_CONNECTION_NAME = "cloud-resources-connection"
 print(PROJECT_ID)
 print(BUCKET_NAME)
 
-# %% id="OA7d79AKI5O9" executionInfo={"status": "ok", "timestamp": 1758537302392, "user_tz": -120, "elapsed": 8835, "user": {"displayName": "", "userId": ""}} colab={"base_uri": "https://localhost:8080/"} outputId="35f7bcdc-0ed6-4b11-bf77-15c5d6286a03"
+# %% colab={"base_uri": "https://localhost:8080/"} executionInfo={"elapsed": 8835, "status": "ok", "timestamp": 1758537302392, "user": {"displayName": "", "userId": ""}, "user_tz": -120} id="OA7d79AKI5O9" outputId="35f7bcdc-0ed6-4b11-bf77-15c5d6286a03"
 # !pip install faker sodapy --quiet
 
-# %% id="lEQa" executionInfo={"status": "ok", "timestamp": 1758537306418, "user_tz": -120, "elapsed": 4029, "user": {"displayName": "", "userId": ""}}
+# %% executionInfo={"elapsed": 4029, "status": "ok", "timestamp": 1758537306418, "user": {"displayName": "", "userId": ""}, "user_tz": -120} id="lEQa"
 from google.cloud import bigquery, storage
 from google.api_core.client_info import ClientInfo
 from google.cloud import exceptions
 
 bigquery_client = bigquery.Client(
-    project=PROJECT_ID,
-    location=LOCATION,
-    client_info=ClientInfo(user_agent=USER_AGENT)
+    project=PROJECT_ID, location=LOCATION, client_info=ClientInfo(user_agent=USER_AGENT)
 )
 storage_client = storage.Client(
-    project=PROJECT_ID,
-    client_info=ClientInfo(user_agent=USER_AGENT)
+    project=PROJECT_ID, client_info=ClientInfo(user_agent=USER_AGENT)
 )
 
-# %% id="qTAC3-bB4YM_" executionInfo={"status": "ok", "timestamp": 1758537306418, "user_tz": -120, "elapsed": 5, "user": {"displayName": "", "userId": ""}}
-dataset = bigquery.Dataset(f'{PROJECT_ID}.{STAGING_BQ_DATASET}')
+# %% executionInfo={"elapsed": 5, "status": "ok", "timestamp": 1758537306418, "user": {"displayName": "", "userId": ""}, "user_tz": -120} id="qTAC3-bB4YM_"
+dataset = bigquery.Dataset(f"{PROJECT_ID}.{STAGING_BQ_DATASET}")
 dataset.location = LOCATION
 dataset = bigquery_client.create_dataset(dataset, exists_ok=True)
 
@@ -106,26 +104,27 @@ dataset = bigquery_client.create_dataset(dataset, exists_ok=True)
 #
 # happy thoughts!
 
-# %% id="Xref" executionInfo={"status": "ok", "timestamp": 1758537306418, "user_tz": -120, "elapsed": 5, "user": {"displayName": "", "userId": ""}}
+# %% executionInfo={"elapsed": 5, "status": "ok", "timestamp": 1758537306418, "user": {"displayName": "", "userId": ""}, "user_tz": -120} id="Xref"
 from csv import DictWriter
 from sodapy import Socrata
-FILENAME = 'raw-mta-data.csv'
+
+FILENAME = "raw-mta-data.csv"
 fieldnames = [
-    'transit_timestamp',
-    'transit_mode',
-    'station_complex_id',
-    'station_complex',
-    'borough',
-    'payment_method',
-    'fare_class_category',
-    'ridership',
-    'transfers',
-    'latitude',
-    'longitude',
-    'georeference',
-    ':@computed_region_kjdx_g34t',
-    ':@computed_region_yamh_8v7k',
-    ':@computed_region_wbg7_3whc'
+    "transit_timestamp",
+    "transit_mode",
+    "station_complex_id",
+    "station_complex",
+    "borough",
+    "payment_method",
+    "fare_class_category",
+    "ridership",
+    "transfers",
+    "latitude",
+    "longitude",
+    "georeference",
+    ":@computed_region_kjdx_g34t",
+    ":@computed_region_yamh_8v7k",
+    ":@computed_region_wbg7_3whc",
 ]
 
 # This function will use the api to download the data into a csv locally
@@ -148,9 +147,11 @@ FORCE_CLEAR_DATA = False
 TOTAL_NUMBER_OF_RECORDS = 110_696_370
 STEP = 50_000
 
+
 def programmatically_download_mta_data():
     import requests
-    client = Socrata('data.ny.gov', None)
+
+    client = Socrata("data.ny.gov", None)
 
     # is there is current file already exists
     existing_file = os.path.exists(FILENAME)
@@ -158,40 +159,46 @@ def programmatically_download_mta_data():
     if not existing_file or FORCE_CLEAR_DATA:
         # if we no current file exists, or flag to ignore it is raised
         rows_got = 0
-        with open(FILENAME, 'w') as mta_fp:
+        with open(FILENAME, "w") as mta_fp:
             mta_writer = DictWriter(mta_fp, fieldnames=fieldnames)
             # write headers
             mta_writer.writeheader()
     else:
-        with open(FILENAME, 'r') as f:
+        with open(FILENAME, "r") as f:
             # read how many records we have already (minus 1 for headers)
             rows_got = sum((1 for _ in f)) - 1
-        print(f'''Starting from existing data. already got {rows_got:,}
-        records ({round(rows_got / TOTAL_NUMBER_OF_RECORDS * 100, 2)}%)''')
+        print(
+            f"""Starting from existing data. already got {rows_got:,}
+        records ({round(rows_got / TOTAL_NUMBER_OF_RECORDS * 100, 2)}%)"""
+        )
     current_step = STEP
     # while the number of rows we got is smaller than the total number of rows expected
     while rows_got < TOTAL_NUMBER_OF_RECORDS:
         try:
             # get more data
-            results = client.get('wujg-7c2s', limit=current_step, offset=rows_got)
+            results = client.get("wujg-7c2s", limit=current_step, offset=rows_got)
         except requests.exceptions.ReadTimeout:
             # in case of a timeout, ask for less data
             current_step = current_step - 1000
-            print(f'Got timeout, adjusting limit to {current_step}')
+            print(f"Got timeout, adjusting limit to {current_step}")
         else:
             # when we get data, append it to the file.
-            with open(FILENAME, 'a') as mta_fp:
+            with open(FILENAME, "a") as mta_fp:
                 mta_writer = DictWriter(mta_fp, fieldnames=fieldnames)
                 mta_writer.writerows(results)
             rows_got = rows_got + len(results)
-            print(f'Got {rows_got:,} rows so far ({round(rows_got / TOTAL_NUMBER_OF_RECORDS * 100, 2)}%)')
+            print(
+                f"Got {rows_got:,} rows so far ({round(rows_got / TOTAL_NUMBER_OF_RECORDS * 100, 2)}%)"
+            )
 
     # TODO: implement code to upload the local CSV to GCS
 
 
-# %% id="SFPL" colab={"base_uri": "https://localhost:8080/"} executionInfo={"status": "ok", "timestamp": 1758537306418, "user_tz": -120, "elapsed": 4, "user": {"displayName": "", "userId": ""}} outputId="5fe1e4c8-c713-4c9b-963f-cfad7645c407"
+# %% colab={"base_uri": "https://localhost:8080/"} executionInfo={"elapsed": 4, "status": "ok", "timestamp": 1758537306418, "user": {"displayName": "", "userId": ""}, "user_tz": -120} id="SFPL" outputId="5fe1e4c8-c713-4c9b-963f-cfad7645c407"
 # This should be a path pointing to the file in GCS.
-MTA_RAW_CSV_PATH_IN_GCS = "mta-raw/mta-manual-downloaded-data_MTA_Subway_Hourly_Ridership.csv"
+MTA_RAW_CSV_PATH_IN_GCS = (
+    "mta-raw/mta-manual-downloaded-data_MTA_Subway_Hourly_Ridership.csv"
+)
 MTA_RAW_CSV = f"gs://{BUCKET_NAME}/{MTA_RAW_CSV_PATH_IN_GCS}"
 
 bucket = storage_client.bucket(BUCKET_NAME)
@@ -200,9 +207,11 @@ _mta_raw_csv_blob = bucket.get_blob(MTA_RAW_CSV_PATH_IN_GCS)
 if _mta_raw_csv_blob:
     print(f"Path '{MTA_RAW_CSV}' found")
 else:
-    raise ValueError(f"Path '{MTA_RAW_CSV}' doesn't appear to point to a valid GCS object")
+    raise ValueError(
+        f"Path '{MTA_RAW_CSV}' doesn't appear to point to a valid GCS object"
+    )
 
-# %% id="BYtC" colab={"base_uri": "https://localhost:8080/"} outputId="b44a930f-7bfc-4280-edcc-47e75fe7f7b2" executionInfo={"status": "ok", "timestamp": 1758537330752, "user_tz": -120, "elapsed": 24337, "user": {"displayName": "", "userId": ""}}
+# %% colab={"base_uri": "https://localhost:8080/"} executionInfo={"elapsed": 24337, "status": "ok", "timestamp": 1758537330752, "user": {"displayName": "", "userId": ""}, "user_tz": -120} id="BYtC" outputId="b44a930f-7bfc-4280-edcc-47e75fe7f7b2"
 # Load raw data to a BQ, to continue transformation of the data
 # Due to its size, it will be easier to load data to bq and transform it there
 
@@ -223,7 +232,7 @@ mta_schema = [
     SchemaField("latitude", "FLOAT"),
     SchemaField("longitude", "FLOAT"),
     SchemaField("Georeference", "GEOGRAPHY"),
-    ]
+]
 
 BQ_TABLE = "raw_mta_data"
 
@@ -240,7 +249,7 @@ load_job = bigquery_client.load_table_from_uri(
 )
 load_job.result()
 
-print('created {}.{}'.format(STAGING_BQ_DATASET, BQ_TABLE))
+print("created {}.{}".format(STAGING_BQ_DATASET, BQ_TABLE))
 
 
 # %% [markdown] id="RGSE"
@@ -251,8 +260,10 @@ print('created {}.{}'.format(STAGING_BQ_DATASET, BQ_TABLE))
 #
 # note, we are saving the results to a pandas dataframe, to be used later
 
-# %% id="Kclp" colab={"base_uri": "https://localhost:8080/", "height": 424} outputId="b4c94e96-f33b-4cab-ea04-3a0ebbfb7265" executionInfo={"status": "ok", "timestamp": 1758537339975, "user_tz": -120, "elapsed": 9226, "user": {"displayName": "", "userId": ""}}
-bigquery_client.query(f"DROP TABLE IF EXISTS {STAGING_BQ_DATASET}.mta_data_stations;").result()
+# %% colab={"base_uri": "https://localhost:8080/", "height": 424} executionInfo={"elapsed": 9226, "status": "ok", "timestamp": 1758537339975, "user": {"displayName": "", "userId": ""}, "user_tz": -120} id="Kclp" outputId="b4c94e96-f33b-4cab-ea04-3a0ebbfb7265"
+bigquery_client.query(
+    f"DROP TABLE IF EXISTS {STAGING_BQ_DATASET}.mta_data_stations;"
+).result()
 
 _query = f"""
 CREATE TABLE {STAGING_BQ_DATASET}.mta_data_stations AS
@@ -275,7 +286,9 @@ WHERE
 """
 bigquery_client.query(_query).result()
 
-stations_df = bigquery_client.query(f"SELECT * FROM {STAGING_BQ_DATASET}.mta_data_stations;").to_dataframe()
+stations_df = bigquery_client.query(
+    f"SELECT * FROM {STAGING_BQ_DATASET}.mta_data_stations;"
+).to_dataframe()
 stations_df
 
 # %% [markdown] id="emfo"
@@ -283,9 +296,9 @@ stations_df
 #
 # This table is a temporary table to hold an hourly data points, with parsed timestamps and station IDs as integers.
 
-# %% id="Hstk" colab={"base_uri": "https://localhost:8080/", "height": 677} outputId="909f6f7e-506b-4143-d82b-5d2b805e4800" executionInfo={"status": "ok", "timestamp": 1758537347885, "user_tz": -120, "elapsed": 7914, "user": {"displayName": "", "userId": ""}}
+# %% colab={"base_uri": "https://localhost:8080/", "height": 677} executionInfo={"elapsed": 7914, "status": "ok", "timestamp": 1758537347885, "user": {"displayName": "", "userId": ""}, "user_tz": -120} id="Hstk" outputId="909f6f7e-506b-4143-d82b-5d2b805e4800"
 bigquery_client.query(
-    f'DROP TABLE IF EXISTS {STAGING_BQ_DATASET}.mta_data_parsed;'
+    f"DROP TABLE IF EXISTS {STAGING_BQ_DATASET}.mta_data_parsed;"
 ).result()
 
 _query = f"""
@@ -299,17 +312,17 @@ _query = f"""
         CAST(REPLACE(station_complex_id, 'TRAM', '98765') AS INT64);
 """
 bigquery_client.query(_query).result()
-bigquery_client.query(f'SELECT * FROM {STAGING_BQ_DATASET}.mta_data_parsed LIMIT 20;').to_dataframe()
+bigquery_client.query(
+    f"SELECT * FROM {STAGING_BQ_DATASET}.mta_data_parsed LIMIT 20;"
+).to_dataframe()
 
 # %% [markdown] id="nWHF"
 # ### The `ridership` table
 #
 # This is the output table to hold minute-by-minute data points, spreading each hour evenly between 60 minutes within the hour.
 
-# %% id="iLit" colab={"base_uri": "https://localhost:8080/", "height": 677} executionInfo={"status": "ok", "timestamp": 1758537382799, "user_tz": -120, "elapsed": 34916, "user": {"displayName": "", "userId": ""}} outputId="a2827d33-1c01-4602-e345-8920a12478af"
-bigquery_client.query(
-    f'DROP TABLE IF EXISTS {STAGING_BQ_DATASET}.ridership;'
-).result()
+# %% colab={"base_uri": "https://localhost:8080/", "height": 677} executionInfo={"elapsed": 34916, "status": "ok", "timestamp": 1758537382799, "user": {"displayName": "", "userId": ""}, "user_tz": -120} id="iLit" outputId="a2827d33-1c01-4602-e345-8920a12478af"
+bigquery_client.query(f"DROP TABLE IF EXISTS {STAGING_BQ_DATASET}.ridership;").result()
 _query = f"""
     CREATE TABLE `{STAGING_BQ_DATASET}.ridership` AS
     SELECT
@@ -327,9 +340,11 @@ _query = f"""
     ORDER BY station_id, transit_timestamp;
 """
 bigquery_client.query(_query).result()
-bigquery_client.query(f'SELECT * FROM {STAGING_BQ_DATASET}.ridership LIMIT 20;').to_dataframe()
+bigquery_client.query(
+    f"SELECT * FROM {STAGING_BQ_DATASET}.ridership LIMIT 20;"
+).to_dataframe()
 
-# %% id="ZHCJ" colab={"base_uri": "https://localhost:8080/", "height": 53} executionInfo={"status": "ok", "timestamp": 1758537389599, "user_tz": -120, "elapsed": 6803, "user": {"displayName": "", "userId": ""}} outputId="04e93738-fe82-40d9-ff6f-7c39da7da244"
+# %% colab={"base_uri": "https://localhost:8080/", "height": 53} executionInfo={"elapsed": 6803, "status": "ok", "timestamp": 1758537389599, "user": {"displayName": "", "userId": ""}, "user_tz": -120} id="ZHCJ" outputId="04e93738-fe82-40d9-ff6f-7c39da7da244"
 # This query is just a verification that the sum of each hour in our minute-by-minute data equals to the data in
 # the temporary hourly data
 # The query re-aggregates the data by hour, and compars to the original hourly data
@@ -365,74 +380,83 @@ bigquery_client.query(_query).to_dataframe()
 #
 # We will then load the faked data into BigQuery, in order to create time windows of the ridership (that represents people waiting in stations) to simulate bus riders, accumulating riders into a bus driving through their stations.
 
-# %% id="qnkX" colab={"base_uri": "https://localhost:8080/"} executionInfo={"status": "ok", "timestamp": 1758537389599, "user_tz": -120, "elapsed": 5, "user": {"displayName": "", "userId": ""}} outputId="ffcfb16b-8dfe-4e4a-99f3-ae2f3950ab17"
+# %% colab={"base_uri": "https://localhost:8080/"} executionInfo={"elapsed": 5, "status": "ok", "timestamp": 1758537389599, "user": {"displayName": "", "userId": ""}, "user_tz": -120} id="qnkX" outputId="ffcfb16b-8dfe-4e4a-99f3-ae2f3950ab17"
 from faker import Faker
 import numpy as np
+
 Faker.seed(42)
 fake = Faker()
 
 import random
 from typing import List
+
+
 def generate_bus_line(i: int, stations_ids: List[int]) -> dict:
-  # randomize a number of stops for this line, with the mean of 35, and roughly between 30 and 40
-  number_of_stops = int(np.random.normal(loc=35, scale=2))
-  return {
-      "bus_line_id": i+1,
-      "bus_line": fake.unique.bothify("?-###").upper(),
-      "number_of_stops": number_of_stops,
-      "stops": random.sample(stations_ids, k=number_of_stops),
-      "frequency_minutes": random.choice([5, 10, 15, 20]),
-  }
+    # randomize a number of stops for this line, with the mean of 35, and roughly between 30 and 40
+    number_of_stops = int(np.random.normal(loc=35, scale=2))
+    return {
+        "bus_line_id": i + 1,
+        "bus_line": fake.unique.bothify("?-###").upper(),
+        "number_of_stops": number_of_stops,
+        "stops": random.sample(stations_ids, k=number_of_stops),
+        "frequency_minutes": random.choice([5, 10, 15, 20]),
+    }
+
 
 def fakify_station(station: dict) -> dict:
-  return {
-      "bus_stop_id": station["station_id"],
-      "address": fake.unique.address().split(",")[0].replace("\n", ", "),
-      "school_zone": fake.boolean(),
-      "seating": fake.boolean(),
-      "borough": station["borough"],
-      "latitude": station["latitude"],
-      "longitude": station["longitude"],
-  }
+    return {
+        "bus_stop_id": station["station_id"],
+        "address": fake.unique.address().split(",")[0].replace("\n", ", "),
+        "school_zone": fake.boolean(),
+        "seating": fake.boolean(),
+        "borough": station["borough"],
+        "latitude": station["latitude"],
+        "longitude": station["longitude"],
+    }
 
 
-stations_lst = stations_df.to_dict('records')
+stations_lst = stations_df.to_dict("records")
 fake_stations_lst = [fakify_station(station) for station in stations_lst]
 stations_ids = [station["bus_stop_id"] for station in fake_stations_lst]
 BUS_LINES_NUM = 25
 bus_lines = [generate_bus_line(i, stations_ids) for i in range(BUS_LINES_NUM)]
 
 random_bus_line = random.choice(bus_lines)
-print(f"Generated {len(bus_lines)} random bus lines. One for example: {random_bus_line}")
-print(f"Anonymized {len(fake_stations_lst)} bus_stations. The first stations for the random bus line above is: {next(filter(lambda x: x['bus_stop_id'] == random_bus_line['stops'][0], fake_stations_lst))}")
+print(
+    f"Generated {len(bus_lines)} random bus lines. One for example: {random_bus_line}"
+)
+print(
+    f"Anonymized {len(fake_stations_lst)} bus_stations. The first stations for the random bus line above is: {next(filter(lambda x: x['bus_stop_id'] == random_bus_line['stops'][0], fake_stations_lst))}"
+)
 
-# %% id="DnEU" executionInfo={"status": "ok", "timestamp": 1758537389600, "user_tz": -120, "elapsed": 4, "user": {"displayName": "", "userId": ""}}
+# %% executionInfo={"elapsed": 4, "status": "ok", "timestamp": 1758537389600, "user": {"displayName": "", "userId": ""}, "user_tz": -120} id="DnEU"
 with open("bus_stations.csv", "w") as fp:
-  writer = DictWriter(fp, fieldnames=fake_stations_lst[0].keys())
-  writer.writeheader()
-  writer.writerows(fake_stations_lst)
+    writer = DictWriter(fp, fieldnames=fake_stations_lst[0].keys())
+    writer.writeheader()
+    writer.writerows(fake_stations_lst)
 
 import json
+
 with open("bus_lines.json", "w") as fp:
-  for line in bus_lines:
-    json.dump(line, fp)
-    fp.write("\n")
+    for line in bus_lines:
+        json.dump(line, fp)
+        fp.write("\n")
 
 # %% [markdown] id="m5m0O2tMetRL"
 # we will load the `bus_lines` to BigQuery as an ICEBERG table, and then export it with the ICEBERG manifest and data files. This will enable us to simulate in the next notebook to mount ICEBERG tables coming from external sources.
 
-# %% colab={"base_uri": "https://localhost:8080/"} id="YPyFRmVQgNaP" executionInfo={"status": "ok", "timestamp": 1758537393012, "user_tz": -120, "elapsed": 3416, "user": {"displayName": "", "userId": ""}} outputId="0c32b680-05f0-49fa-b21b-acf9acd99c5e"
+# %% colab={"base_uri": "https://localhost:8080/"} executionInfo={"elapsed": 3416, "status": "ok", "timestamp": 1758537393012, "user": {"displayName": "", "userId": ""}, "user_tz": -120} id="YPyFRmVQgNaP" outputId="0c32b680-05f0-49fa-b21b-acf9acd99c5e"
 bus_lines_schema = [
     SchemaField("bus_line_id", "INTEGER"),
     SchemaField("bus_line", "STRING"),
     SchemaField("number_of_stops", "INTEGER"),
     SchemaField("stops", "INTEGER", mode="REPEATED"),
     SchemaField("frequency_minutes", "INTEGER"),
-    ]
+]
 
 BQ_TABLE = "bus_lines"
 
-dataset = bigquery.Dataset(f'{PROJECT_ID}.{STAGING_BQ_DATASET}')
+dataset = bigquery.Dataset(f"{PROJECT_ID}.{STAGING_BQ_DATASET}")
 
 
 table_ref = dataset.table(BQ_TABLE)
@@ -443,14 +467,14 @@ job_config = bigquery.LoadJobConfig(
     schema=bus_lines_schema,
 )
 with open("bus_lines.json", "rb") as fp:
-  load_job = bigquery_client.load_table_from_file(
-      fp, table_ref, job_config=job_config
-  )
-  load_job.result()
+    load_job = bigquery_client.load_table_from_file(
+        fp, table_ref, job_config=job_config
+    )
+    load_job.result()
 
-print('created {}.{}'.format(STAGING_BQ_DATASET, BQ_TABLE))
+print("created {}.{}".format(STAGING_BQ_DATASET, BQ_TABLE))
 
-# %% id="DKiM43tr95a8" colab={"base_uri": "https://localhost:8080/"} executionInfo={"status": "ok", "timestamp": 1758537396550, "user_tz": -120, "elapsed": 3541, "user": {"displayName": "", "userId": ""}} outputId="101c4b66-483d-401f-89ea-d09e945e8a6b"
+# %% colab={"base_uri": "https://localhost:8080/"} executionInfo={"elapsed": 3541, "status": "ok", "timestamp": 1758537396550, "user": {"displayName": "", "userId": ""}, "user_tz": -120} id="DKiM43tr95a8" outputId="101c4b66-483d-401f-89ea-d09e945e8a6b"
 bus_stations_schema = [
     SchemaField("bus_stop_id", "INTEGER"),
     SchemaField("address", "STRING"),
@@ -463,7 +487,7 @@ bus_stations_schema = [
 
 BQ_TABLE = "bus_stations"
 
-dataset = bigquery.Dataset(f'{PROJECT_ID}.{STAGING_BQ_DATASET}')
+dataset = bigquery.Dataset(f"{PROJECT_ID}.{STAGING_BQ_DATASET}")
 
 
 table_ref = dataset.table(BQ_TABLE)
@@ -475,12 +499,12 @@ job_config = bigquery.LoadJobConfig(
     schema=bus_stations_schema,
 )
 with open("bus_stations.csv", "rb") as fp:
-  load_job = bigquery_client.load_table_from_file(
-      fp, table_ref, job_config=job_config
-  )
-  load_job.result()
+    load_job = bigquery_client.load_table_from_file(
+        fp, table_ref, job_config=job_config
+    )
+    load_job.result()
 
-print('created {}.{}'.format(STAGING_BQ_DATASET, BQ_TABLE))
+print("created {}.{}".format(STAGING_BQ_DATASET, BQ_TABLE))
 
 
 # %% [markdown] id="TqIu"
@@ -494,18 +518,18 @@ print('created {}.{}'.format(STAGING_BQ_DATASET, BQ_TABLE))
 #
 # - `ridership` - this table is the largest by far (972,829,500 rows). We will export this table to parquet format to be loaded as a managed iceberg table.
 
-# %% id="QB9PSo-keP9j" executionInfo={"status": "ok", "timestamp": 1758537396550, "user_tz": -120, "elapsed": 4, "user": {"displayName": "", "userId": ""}}
+# %% executionInfo={"elapsed": 4, "status": "ok", "timestamp": 1758537396550, "user": {"displayName": "", "userId": ""}, "user_tz": -120} id="QB9PSo-keP9j"
 # bus stations
 bus_stations_blob = bucket.blob("mta_staging_data/bus_stations.csv")
 if bus_stations_blob.exists():
-  bus_stations_blob.delete()
+    bus_stations_blob.delete()
 bus_stations_blob.upload_from_filename("bus_stations.csv")
 
-# %% id="ulZA" colab={"base_uri": "https://localhost:8080/"} executionInfo={"status": "ok", "timestamp": 1758537397960, "user_tz": -120, "elapsed": 1413, "user": {"displayName": "", "userId": ""}} outputId="d993da33-1852-4bf1-bbef-baf44665ee3e"
+# %% colab={"base_uri": "https://localhost:8080/"} executionInfo={"elapsed": 1413, "status": "ok", "timestamp": 1758537397960, "user": {"displayName": "", "userId": ""}, "user_tz": -120} id="ulZA" outputId="d993da33-1852-4bf1-bbef-baf44665ee3e"
 from google.cloud.bigquery import ExtractJobConfig
 
-target_glob = 'mta_staging_data/bus_lines'
-destination_uri = 'gs://{}/{}/*.parquet'.format(BUCKET_NAME, target_glob)
+target_glob = "mta_staging_data/bus_lines"
+destination_uri = "gs://{}/{}/*.parquet".format(BUCKET_NAME, target_glob)
 
 blob_list = bucket.list_blobs(prefix=target_glob)
 blob_list = [blob for blob in blob_list]
@@ -514,13 +538,15 @@ bucket.delete_blobs(blob_list)
 job_config = ExtractJobConfig()
 job_config.destination_format = bigquery.DestinationFormat.PARQUET
 
-table_ref_1 = dataset.table('bus_lines')
-extract_job = bigquery_client.extract_table(table_ref_1, destination_uri, location=LOCATION, job_config=job_config)
+table_ref_1 = dataset.table("bus_lines")
+extract_job = bigquery_client.extract_table(
+    table_ref_1, destination_uri, location=LOCATION, job_config=job_config
+)
 extract_job.result()
 
-# %% id="Vxnm" colab={"base_uri": "https://localhost:8080/"} executionInfo={"status": "ok", "timestamp": 1758537403534, "user_tz": -120, "elapsed": 5575, "user": {"displayName": "", "userId": ""}} outputId="0e5e3399-c43e-4186-fd0f-14350fc64ee1"
-target_glob = 'mta_staging_data/ridership'
-destination_uri = 'gs://{}/{}/*.parquet'.format(BUCKET_NAME, target_glob)
+# %% colab={"base_uri": "https://localhost:8080/"} executionInfo={"elapsed": 5575, "status": "ok", "timestamp": 1758537403534, "user": {"displayName": "", "userId": ""}, "user_tz": -120} id="Vxnm" outputId="0e5e3399-c43e-4186-fd0f-14350fc64ee1"
+target_glob = "mta_staging_data/ridership"
+destination_uri = "gs://{}/{}/*.parquet".format(BUCKET_NAME, target_glob)
 
 blob_list = bucket.list_blobs(match_glob=target_glob)
 blob_list = [blob for blob in blob_list]
@@ -529,14 +555,16 @@ bucket.delete_blobs(blob_list)
 job_config = ExtractJobConfig()
 job_config.destination_format = bigquery.DestinationFormat.PARQUET
 
-table_ref_1 = dataset.table('ridership')
-extract_job = bigquery_client.extract_table(table_ref_1, destination_uri, location=LOCATION, job_config=job_config)
+table_ref_1 = dataset.table("ridership")
+extract_job = bigquery_client.extract_table(
+    table_ref_1, destination_uri, location=LOCATION, job_config=job_config
+)
 extract_job.result()
 
-# %% id="ecfG" executionInfo={"status": "ok", "timestamp": 1758537403534, "user_tz": -120, "elapsed": 3, "user": {"displayName": "", "userId": ""}}
+# %% executionInfo={"elapsed": 3, "status": "ok", "timestamp": 1758537403534, "user": {"displayName": "", "userId": ""}, "user_tz": -120} id="ecfG"
 try:
-  for table in bigquery_client.list_tables(dataset):
-    bigquery_client.delete_table(table)
-  bigquery_client.delete_dataset(dataset)
+    for table in bigquery_client.list_tables(dataset):
+        bigquery_client.delete_table(table)
+    bigquery_client.delete_dataset(dataset)
 except exceptions.NotFound:
-  print("Dataset looks already dropped")
+    print("Dataset looks already dropped")
