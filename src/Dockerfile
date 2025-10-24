@@ -47,7 +47,7 @@ WORKDIR /app/src
 # Copy pyproject.toml and install dependencies using uv
 COPY pyproject.toml .
 # `uv sync` installs all direct and transitive dependencies
-RUN uv sync
+RUN uv sync --no-dev
 RUN uv pip install -e .
 
 

@@ -92,4 +92,24 @@ In this repo, you will find the following folders:
   when the corresponding buttons are pressed in the web interface.
     - `kafka_service`: When started, this service will query BigQuery `bus_rides` table, for 5 days worth of data from "
       today in 2024", change the results to look like new messages from now, and push to kafka `bus-updates` topic.
-    - `pyspark_service`: When started, this service will start the pyspark streaming job, and monitor its status.  
+    - `pyspark_service`: When started, this service will start the pyspark streaming job, and monitor its status.
+
+## Development
+
+In the `assets` and the `src` folders, use `uv` to install the virtual environments.
+
+For the `assets` environment, pay attention to the dev dependencies, and install the pre-hooks before commiting:
+
+```bash
+cd assets 
+uv sync
+uv run pre-commit install
+```
+
+The jupytext and black pre-commit hooks will now be triggered whenever you commit a change to the notebooks, and convert
+those changes to the paired `.py` files.
+This will make code reviews a much more friendly experience.
+
+When working the notebooks, pay attention that the notebooks outputs have to be cleared manually. The jupytext
+pre-commit hook clashes with other potential hooks that would clear the outputs, as they change the notebooks, which
+causes a loop between hooks.
