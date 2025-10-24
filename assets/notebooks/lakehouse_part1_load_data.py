@@ -5,7 +5,7 @@
 #       extension: .py
 #       format_name: percent
 #       format_version: '1.3'
-#       jupytext_version: 1.18.1
+#       jupytext_version: 1.16.2
 #   kernelspec:
 #     display_name: Python 3 (ipykernel)
 #     language: python
@@ -344,7 +344,7 @@ display_blobs_with_prefix(BQ_CATALOG_BUCKET_NAME, bus_stops_prefix + "/metadata"
 #
 # Let's take a closer look:
 
-# %% id="UGAyco-yqmdw"
+# %%
 from pprint import pprint
 
 all_metadata_blobs = list(storage_client.list_blobs(BQ_CATALOG_BUCKET_NAME, match_glob=f"{bus_stops_prefix}/metadata/*"))
@@ -359,11 +359,11 @@ print("-" * 20)
 
 latest_json_file = list(filter(lambda x: x.name.endswith(f"v{version_hint}.metadata.json"), all_metadata_blobs))[0]
 latest_json = json.loads(latest_json_file.download_as_string().decode("utf-8"))
-print("Latest metadata from our file:")
+print(f"Latest metadata from our file metadata (v{version_hint}.metadata.json):")
 print("")
 pprint(latest_json)
 
-# %% id="4nIrIDkytqXj"
+# %%
 # Definitely much more metadata!!!!
 # One last thing before we continue, let's take a look at the avro files
 # in the json file, we see one of them being mentioned (the "manifest-list")
