@@ -88,7 +88,7 @@ In this repo, you will find the following folders:
       using [jupytext](https://jupytext.readthedocs.io/en/latest/) package for development,
       so for
       each `.ipynb` file, there is a matching `.py` file, to make git tracking and comparison easier.
-- `src`: The webapp (flask) to display real-time data. The app has 2 important background workers that are activated
+- `webapp`: The webapp (flask) to display real-time data. The app has 2 important background workers that are activated
   when the corresponding buttons are pressed in the web interface.
     - `kafka_service`: When started, this service will query BigQuery `bus_rides` table, for 5 days worth of data from "
       today in 2024", change the results to look like new messages from now, and push to kafka `bus-updates` topic.
@@ -96,7 +96,7 @@ In this repo, you will find the following folders:
 
 ## Development
 
-In the `assets` and the `src` folders, use `uv` to install the virtual environments.
+In the `assets` and the `webapp` folders, use `uv` to install the virtual environments.
 
 For the `assets` environment, pay attention to the dev dependencies, and install the pre-hooks before commiting:
 

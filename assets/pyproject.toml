@@ -13,7 +13,7 @@
 # limitations under the License.
 
 [project]
-name = "open-data-lakehouse-demo-notebooks-and-code"
+name = "open-data-lakehouse-demo-assets"
 version = "0.1.0"
 description = "These notebooks contains parts of the open data lakehbouse demo"
 requires-python = ">=3.11"

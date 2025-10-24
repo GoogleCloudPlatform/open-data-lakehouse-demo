@@ -33,19 +33,19 @@ from bq_service import BigQueryService
 
 class PySparkService:
     def __init__(
-            self,
-            project_id: str,
-            region: str,
-            gcs_main_bucket: str,
-            kafka_bootstrap: str,
-            kafka_topic: str,
-            kafka_alert_topic: str,
-            spark_tmp_bucket: str,
-            spark_checkpoint_location: str,
-            bigquery_dataset: str,
-            bigquery_table: str,
-            subnet_uri: str,
-            service_account: str,
+        self,
+        project_id: str,
+        region: str,
+        gcs_main_bucket: str,
+        kafka_bootstrap: str,
+        kafka_topic: str,
+        kafka_alert_topic: str,
+        spark_tmp_bucket: str,
+        spark_checkpoint_location: str,
+        bigquery_dataset: str,
+        bigquery_table: str,
+        subnet_uri: str,
+        service_account: str,
     ):
         self.project_id = project_id
         self.region = region
@@ -60,9 +60,9 @@ class PySparkService:
         self.subnet_uri = subnet_uri
         self.service_account = service_account
 
-        self.client = dataproc.BatchControllerClient(client_options={
-            "api_endpoint": f"{region}-dataproc.googleapis.com:443"
-        })
+        self.client = dataproc.BatchControllerClient(
+            client_options={"api_endpoint": f"{region}-dataproc.googleapis.com:443"}
+        )
         self.bq_service = BigQueryService(bigquery_dataset)
         self.storage_client = storage.Client()
         self.storage_bucket = self.storage_client.get_bucket(self.spark_tmp_bucket)
@@ -86,7 +86,9 @@ class PySparkService:
 
     # noinspection PyTypeChecker
     def start_pyspark(self, stop_event, retry_count: int = 0):
-        self.__status__ = JobStatus(status=PySparkState.PRE_RUN_CLEANUP, message="Cleaning up previous runs.")
+        self.__status__ = JobStatus(
+            status=PySparkState.PRE_RUN_CLEANUP, message="Cleaning up previous runs."
+        )
         self.clear_bus_state()
         # self.clear_previous_checkpoints()
         batch = dataproc.Batch(
@@ -100,16 +102,15 @@ class PySparkService:
                     f"--spark-checkpoint-location={self.spark_checkpoint_location}",
                     f"--bigquery-table={self.bigquery_dataset}.{self.bigquery_table}",
                 ],
-                file_uris=[f"gs://{self.gcs_main_bucket}/code/ivySettings.xml"]
+                file_uris=[f"gs://{self.gcs_main_bucket}/code/ivySettings.xml"],
             ),
             runtime_config=dataproc.RuntimeConfig(
                 version="2.3",
                 properties={
                     "spark.jars.ivySettings": "./ivySettings.xml",
-                    "spark.jars.packages":
-                        "org.apache.spark:spark-streaming-kafka-0-10_2.13:3.5.1,"
-                        "org.apache.spark:spark-sql-kafka-0-10_2.13:3.5.1,"
-                        "com.google.cloud.hosted.kafka:managed-kafka-auth-login-handler:1.0.5",
+                    "spark.jars.packages": "org.apache.spark:spark-streaming-kafka-0-10_2.13:3.5.1,"
+                    "org.apache.spark:spark-sql-kafka-0-10_2.13:3.5.1,"
+                    "com.google.cloud.hosted.kafka:managed-kafka-auth-login-handler:1.0.5",
                 },
             ),
             environment_config=dataproc.EnvironmentConfig(
@@ -120,68 +121,100 @@ class PySparkService:
             ),
         )
         try:
-            self.__status__ = JobStatus(status=PySparkState.PENDING, message="Submitting job.")
+            self.__status__ = JobStatus(
+                status=PySparkState.PENDING, message="Submitting job."
+            )
             self.client.create_batch(
                 request={
                     "parent": f"projects/{self.project_id}/locations/{self.region}",
                     "batch": batch,
-                    "batch_id": self.batch_id
+                    "batch_id": self.batch_id,
                 }
             )
         except exceptions.AlreadyExists:
             if retry_count < 3:
                 retry_count += 1
-                logging.info(f"Job already exists. Deleting and retrying (Attempt {retry_count})")
+                logging.info(
+                    f"Job already exists. Deleting and retrying (Attempt {retry_count})"
+                )
                 self.cancel_job()
                 return self.start_pyspark(stop_event, retry_count)
-            self.__status__ = JobStatus(status=PySparkState.ALREADY_EXISTS, message="Job already exists. Check manually.")
+            self.__status__ = JobStatus(
+                status=PySparkState.ALREADY_EXISTS,
+                message="Job already exists. Check manually.",
+            )
         except exceptions.PermissionDenied:
-            self.__status__ = JobStatus(PySparkState.PERMISSION_DENIED, message="Permission Denied.")
+            self.__status__ = JobStatus(
+                PySparkState.PERMISSION_DENIED, message="Permission Denied."
+            )
         except exceptions.ResourceExhausted:
-            self.__status__ = JobStatus(PySparkState.RESOURCE_EXHAUSTED, message="Resource exhausted.")
+            self.__status__ = JobStatus(
+                PySparkState.RESOURCE_EXHAUSTED, message="Resource exhausted."
+            )
         except exceptions.BadRequest:
-            self.__status__ = JobStatus(status=PySparkState.BAD_REQUEST, message="Bad request.")
+            self.__status__ = JobStatus(
+                status=PySparkState.BAD_REQUEST, message="Bad request."
+            )
         except exceptions.InternalServerError:
             self.__status__ = JobStatus(
                 status=PySparkState.INTERNAL_SERVER_ERROR,
-                message="Internal server error from Dataproc API."
+                message="Internal server error from Dataproc API.",
             )
         except Exception as e:
-            self.__status__ = JobStatus(status=PySparkState.UNKNOWN_ERROR, message=str(e))
-        self.__status__ = JobStatus(status=PySparkState.SUBMITTED, message="Job Submitted")
-        
+            self.__status__ = JobStatus(
+                status=PySparkState.UNKNOWN_ERROR, message=str(e)
+            )
+        self.__status__ = JobStatus(
+            status=PySparkState.SUBMITTED, message="Job Submitted"
+        )
 
     def get_stats(self):
         return self.bq_service.get_bus_state(self.bigquery_table)
 
     def cancel_job(self):
         try:
-            get_batch_operation = self.client.get_batch(request={
-                "name": self.full_batch_id,
-            })
+            get_batch_operation = self.client.get_batch(
+                request={
+                    "name": self.full_batch_id,
+                }
+            )
         except exceptions.NotFound:
             logging.info("Batch Job not found or not started.")
-            self.__status__ = JobStatus(status=PySparkState.NOT_STARTED, message="Job not started.")
+            self.__status__ = JobStatus(
+                status=PySparkState.NOT_STARTED, message="Job not started."
+            )
             return
         except Exception as e:
             logging.exception(e)
-            self.__status__ = JobStatus(status=PySparkState.UNKNOWN_ERROR, message=str(e))
+            self.__status__ = JobStatus(
+                status=PySparkState.UNKNOWN_ERROR, message=str(e)
+            )
             return
         logging.info("Found existing job. Getting the operation attached")
         try:
-            batch_operation = self.client.get_operation(request=GetOperationRequest(name=get_batch_operation.operation))
+            batch_operation = self.client.get_operation(
+                request=GetOperationRequest(name=get_batch_operation.operation)
+            )
         except Exception as e:
             logging.exception(e)
-            self.__status__ = JobStatus(status=PySparkState.UNKNOWN_ERROR, message=str(e))
+            self.__status__ = JobStatus(
+                status=PySparkState.UNKNOWN_ERROR, message=str(e)
+            )
             return
         logging.info("Found existing operation. Canceling the job")
         try:
             logging.info("Cancelling existing operation")
-            self.__status__ = JobStatus(status=PySparkState.CANCELLING, message="Cancelling job.")
-            self.client.cancel_operation(request=CancelOperationRequest(name=batch_operation.name))
+            self.__status__ = JobStatus(
+                status=PySparkState.CANCELLING, message="Cancelling job."
+            )
+            self.client.cancel_operation(
+                request=CancelOperationRequest(name=batch_operation.name)
+            )
         except Exception as e:
             logging.exception(e)
-            self.__status__ = JobStatus(status=PySparkState.UNKNOWN_ERROR, message=str(e))
+            self.__status__ = JobStatus(
+                status=PySparkState.UNKNOWN_ERROR, message=str(e)
+            )
             return
         logging.info("Cancelled existing operation. Deleting the batch job")
         try:
@@ -190,17 +223,21 @@ class PySparkService:
             self.client.delete_batch(request={"name": self.full_batch_id})
         except Exception as e:
             logging.exception(e)
-            self.__status__ = JobStatus(status=PySparkState.UNKNOWN_ERROR, message=str(e))
+            self.__status__ = JobStatus(
+                status=PySparkState.UNKNOWN_ERROR, message=str(e)
+            )
             return
-        self.__status__ = JobStatus(status=PySparkState.CANCELLED, message="Job cancelled.")
+        self.__status__ = JobStatus(
+            status=PySparkState.CANCELLED, message="Job cancelled."
+        )
 
     def get_job_status(self) -> JobStatus:
         try:
-            operation = self.client.get_batch(request={
-                "name": self.full_batch_id
-            })
+            operation = self.client.get_batch(request={"name": self.full_batch_id})
         except exceptions.NotFound:
-            return JobStatus(status=PySparkState.NOT_STARTED, message="Job not started.")
+            return JobStatus(
+                status=PySparkState.NOT_STARTED, message="Job not started."
+            )
         except Exception as e:
             logging.exception(e)
             return JobStatus(status=PySparkState.UNKNOWN_ERROR, message=str(e))
@@ -236,9 +273,9 @@ class PySparkService:
                     message="Unknown state - check job manually",
                 )
         return JobStatus(
-                    status=PySparkState.STATE_UNSPECIFIED,
-                    message="Unknown state - check job manually",
-                )
+            status=PySparkState.STATE_UNSPECIFIED,
+            message="Unknown state - check job manually",
+        )
 
     def clear_bus_state(self):
         self.bq_service.clear_table(self.bigquery_table)
@@ -252,7 +289,9 @@ class PySparkService:
             return
 
         # Delete each blob
-        logging.info(f"Deleting {len(blobs)} blobs from bucket '{self.spark_tmp_bucket}'.")
+        logging.info(
+            f"Deleting {len(blobs)} blobs from bucket '{self.spark_tmp_bucket}'."
+        )
         with ThreadPoolExecutor(max_workers=10) as executor:
             futures = [executor.submit(self.delete_blob, blob.name) for blob in blobs]
             for future in futures:
@@ -263,7 +302,7 @@ class PySparkService:
     def delete_blob(self, blob_name):
         blob = self.storage_bucket.blob(blob_name)
         self.storage_bucket.delete_blob(blob)
-        
+
 
 class PySparkState(enum.IntEnum):
     LOADING = 0
@@ -287,6 +326,7 @@ class PySparkState(enum.IntEnum):
     FAILED = 22
     CANCELLED = 23
 
+
 @dataclass
 class JobStatus:
     status: PySparkState
@@ -300,6 +340,5 @@ class JobStatus:
         return {
             "status": str(self.status.name),
             "message": self.message,
-            "is_running": self.is_running
+            "is_running": self.is_running,
         }
-    

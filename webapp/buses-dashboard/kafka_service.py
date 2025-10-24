@@ -30,7 +30,7 @@ class JsonSerializer(Serializer):
         if obj is None:
             return None
         try:
-            return json.dumps(obj, default=str).encode('utf-8')
+            return json.dumps(obj, default=str).encode("utf-8")
         except _struct.error as e:
             raise SerializationError(str(e))
 
@@ -41,12 +41,11 @@ class KafkaService:
     sent_messages = 0
     token_provider = TokenProvider()
 
-
     @classmethod
-    def get_kafka_producer(cls, bootstrap_servers='localhost:29092'):
+    def get_kafka_producer(cls, bootstrap_servers="localhost:29092"):
         config = {
-            'bootstrap.servers': bootstrap_servers,
-            'value.serializer': JsonSerializer()
+            "bootstrap.servers": bootstrap_servers,
+            "value.serializer": JsonSerializer(),
         }
         if not bootstrap_servers.startswith("localhost"):
             # assume prod env
@@ -64,11 +63,14 @@ class KafkaService:
         if error is not None:
             logging.error(f"Message delivery failed: {error}")
         else:
-            logging.info(f"Message delivered to topic '{message.topic()}' partition [{message.partition()}] offset {message.offset()}")
-
+            logging.info(
+                f"Message delivered to topic '{message.topic()}' partition [{message.partition()}] offset {message.offset()}"
+            )
 
     @classmethod
-    def start_kafka_messages_stream(cls, stop_event, bootstrap_servers, topic, interval_seconds=1):
+    def start_kafka_messages_stream(
+        cls, stop_event, bootstrap_servers, topic, interval_seconds=1
+    ):
         """Continuously sends Kafka messages until the stop_event is set."""
         # Get data from the past, with updated timestamps to simulate new data
         bigquery_client = BigQueryService(os.getenv("BQ_DATASET"))
@@ -82,11 +84,17 @@ class KafkaService:
             ride_data = rides_data[cls.sent_messages]
 
             cls.sent_messages += 1
-            message = {"id": cls.sent_messages, "timestamp": time.time(), "data": ride_data}
+            message = {
+                "id": cls.sent_messages,
+                "timestamp": time.time(),
+                "data": ride_data,
+            }
             logging.info(f"Sending message {cls.sent_messages}")
             try:
-                producer_instance.produce(topic, value=message, on_delivery=cls.delivery_callback)
-                producer_instance.flush() # ensure sending message
+                producer_instance.produce(
+                    topic, value=message, on_delivery=cls.delivery_callback
+                )
+                producer_instance.flush()  # ensure sending message
             except KafkaException as e:
                 logging.exception(e)
             except Exception as e:
@@ -101,6 +109,7 @@ class KafkaService:
             "total_messages": cls.total_messages,
             "sent_messages": cls.sent_messages,
         }
+
 
 """
 
