@@ -22,7 +22,7 @@
 #
 # This notebook will process the data to simulate bus rides. The original datasets describes `ridership` as passengers in bus stations. We created bus lines, but not the rides. This will be the goal of this notebook. We accomplish this using **Google's Cloud Serverless Apache Spark**.
 #
-# The processing will simulate `bus ridership` data, based on `bus station ridership` data. The `bus station ridership` shows passengers waiting at a given station at a given timestamp. Our PySpark processing pipelines will use Pandas UDFs, simulating a bus picking up those passengers while driving its route. The routes for the buses are taken from the pre-made `bus_lines` table.
+# The processing will simulate `bus ridership` data, based on `bus station ridership` data. The `bus station ridership` shows passengers waiting at a given station at a given timestamp. Our PySpark processing pipelines will use Pandas UDFs, simulating a bus picking up those passengers while driving it's route. The routes for the buses are taken from the pre-made `bus_lines` table.
 #
 # All data in this notebook was prepared in the previous `part0` notebook, and loaded in `part1` notebook.
 #
@@ -36,9 +36,9 @@
 #
 # In order to read both types of tables, spark needs to access the metadata and the data itself - and it can do so in 2 ways:
 #
-# 1) access the data through BigQuery: This method is no different from reading BigQuery native tables, using the [Spark-BigQuery-Connector](https://github.com/GoogleCloudDataproc/spark-bigquery-connector), which is already preloaded in GCP environments (Like Colab Enterprise). This means that spark will access both metadata and data, simply by accessing the BigQuery API, and use BigQuery compute slots in order to retrieve this data. **Pros:** access any data, regardless of storage, in the same way. **Cons:** uses BigQuery slots, hence effects costs differently.
+# 1) access the data through BigQuery: This method is no different then reading BigQuery native tables, using the [Spark-BigQuery-Connector](https://github.com/GoogleCloudDataproc/spark-bigquery-connector), which is already pre-loaded in GCP environments (Like Colab Enterprise). This means that spark will access both metadata and data, simply by accessing the BigQuery API, and use BigQuery compute slots in order to retrieve this data. **Pros:** access any data, regardless of storage, in the same way. **Cons:** uses BigQuery slots, hence effects costs differently.
 #
-# 2) access the data through metadata on GCS: This method is the standard way to read Iceberg data, regardless of where it is stored - this means that we need to configure a catalog for spark, and tell it where the tables are stored in the iceberg format. Spark, using the `iceberg` libraries, will scan the catalogs for tables data and metadata. If the catalog was written by Spark, and is just accessible to BigQuery by external tables, we should be able to access the data the same way we have written it before, using the same catalog. If the data is managed by BigQuery, we just need to make sure to expose the up-to-date metadata to spark, which means **exporting the metadata** to GCS, before starting the spark process. **Pros:** Not using BigQuery slots, keeps your processing pipelines consistent and costs to a minimum for data access. **Cons:** just more configuration.
+# 2) access the data through metadata on GCS: This method is the standard way to read Iceberg data, regardless of where it is stored - this means that we need to configure a catalog for spark, and tell it where the tables are stored in the iceberg format. Spark, using the `iceberg` libraries, will scan the catalogs for tables data and metadata. If the catalog was written by Spark, and is just accessible to BigQuery by external tables, we should be able to access the data the same way we written it before, using the same catalog. If the data is managed by BigQuery, we just need to make sure to expose the up-to-date metadata to spark, which means **exporting the metadata** to GCS, before starting the spark process. **Pros:** Not using BigQuery slots, keeps your processing pipelines consistent and costs to a minimum for data access. **Cons:** just more configuration.
 #
 # In this notebook, we will access data in all different ways. We will configure the **external** catalog that was used in notebook 1 to write the `bus_lines` external table. We will configure the **BigQuery catalog** to read the `ridership` managed table. And we will read the `bus_stations` table directly through BigQuery, using BigQuery slots to do so.
 #
@@ -49,6 +49,8 @@
 # ## Setup environment
 
 # %%
+import os
+
 USER_AGENT = "cloud-solutions/data-to-ai-nb-v3"
 
 # PROJECT_ID = !gcloud config get-value project
@@ -68,10 +70,9 @@ REST_CATALOG_PREFIX = "rest_namespace"
 
 print(PROJECT_ID)
 
-from google.api_core.client_info import ClientInfo
-
 # %%
 from google.cloud import bigquery, storage
+from google.api_core.client_info import ClientInfo
 
 # we will use the storage client only for demonstration purposes
 storage_client = storage.Client(
@@ -304,7 +305,7 @@ bus_lines_with_min_max.show(10)
 # ## Simulate bus trips - without passengers (for now)
 
 # %%
-from typing import List, Tuple
+from typing import List, Tuple, TypeVar
 from datetime import datetime, timedelta
 import random
 
@@ -481,7 +482,7 @@ simulated_ride_output_schema = t.StructType(
 # this python function accepts a dataframe, and returns the same.
 # each call to the function will be of a dataframe representing one trip for one bus
 # it will generate and calculate all the above attributes,
-# and return an extended dataframe with all the relevant data
+# and return an extended dataframe with all of the relevant data
 def calculate_bus_passengers(pdf: pd.DataFrame) -> pd.DataFrame:
     """
     Calculates the total number of passengers on the bus at each stop for a given bus ride.
