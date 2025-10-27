@@ -1,18 +1,4 @@
-# ---
-# jupyter:
-#   jupytext:
-#     text_representation:
-#       extension: .py
-#       format_name: percent
-#       format_version: '1.3'
-#       jupytext_version: 1.14.7
-#   kernelspec:
-#     display_name: Python 3
-#     language: python
-#     name: python3
-# ---
-
-# %% id="lvNpj26L7bbY67xWsvugZull"
+# %%
 # Copyright 2025 Google LLC
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -27,7 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# %% [markdown] id="g4xlhet9alul"
+# %% [markdown]
 # # Ridership Open Lakehouse Demo (Part 3): Time-series forecasting of ridership data
 #
 # This notebook will demonstrate a strategy to implement an open lakehouse on GCP, using Apache Iceberg, as an open source standard for managing data, while still leveraging GCP native capabilities. This demo will use BigQuery Manged Iceberg Tables, Managed Apache Kafka and Apache Kafka Connect to ingest streaming data, Vertex AI for Generative AI queries on top of the data and Dataplex to govern tables.
@@ -36,10 +22,10 @@
 #
 # We will evaluate the models accuracy and generate future data to be used in the next chapters for real-time predictions and alerting.
 
-# %% [markdown] id="TJNbPGBEgQKC"
+# %% [markdown]
 # ## Environment Setup
 
-# %% id="UbBMzAcsgaOW"
+# %%
 USER_AGENT = "cloud-solutions/data-to-ai-nb-v3"
 
 # PROJECT_ID = !gcloud config get-value project
@@ -61,7 +47,7 @@ print(PROJECT_ID)
 
 from google.api_core.client_info import ClientInfo
 
-# %% id="NXsTs1pda7rF"
+# %%
 from google.cloud import bigquery, storage
 
 bigquery_client = bigquery.Client(
@@ -71,7 +57,7 @@ storage_client = storage.Client(
     project=PROJECT_ID, client_info=ClientInfo(user_agent=USER_AGENT)
 )
 
-# %% id="QdvGeeLjgi0N"
+# %%
 # Some helper functions
 
 import pandas as pd
@@ -106,7 +92,7 @@ def select_top_rows(table_name: str, num_rows: int = 10):
     return bigquery_client.query(query).to_dataframe()
 
 
-# %% [markdown] id="4ZeA3dCQPpVE"
+# %% [markdown]
 # # Feature Engineering
 #
 # In our demo, we want to predict rise and spikes to the demand of bus lines. In order to do that, we will calculate a `demand_metric`, which will be high when all passengers cannot fit on a bus, and low when we have remaining capacity on a bus. This metric would allow us to deploy additional buses when it is above some threshold so that we can reduce the number of passengers that cannot board.
@@ -121,10 +107,10 @@ def select_top_rows(table_name: str, num_rows: int = 10):
 #
 #   Obviously, a couple of these variables are related (the station and borough are related). In a real-world scenario, this could be considered a bad practice, and lead to overfitting towards a specific variable.
 
-# %% [markdown] id="OeEJB9VBT7-m"
+# %% [markdown]
 # ### Create bus rides table with features
 
-# %% id="zYO9_4gfJLXB"
+# %%
 FEATURES_TABLE_NAME = "bus_rides_features"
 prefix = f"{BQ_CATALOG_PREFIX}/{FEATURES_TABLE_NAME}"
 
@@ -170,19 +156,19 @@ LEFT JOIN `{BQ_DATASET}.bus_lines` AS l ON l.bus_line_id = r.bus_line_id
 """
 bigquery_client.query(query).result()
 
-# %% id="QnBJKHcuo3Bf"
+# %%
 select_top_rows(FEATURES_TABLE_NAME)
 
-# %% [markdown] id="3yMyeDdVUXHY"
+# %% [markdown]
 # ## Visualize Projected data
 #
 # Let's now create a visualization for each of these features, the relationship with the `ridership` column, to see the effects of different features on the target variable.
 
-# %% [markdown] id="ue5rOAnkJ_IE"
+# %% [markdown]
 # ### Demand per bus line over time
 # Let's take a look at the last 90 days of ridership data. We'll specifically look at the `remaining_at_stop` as our metric to determined if we need to alert of high demand. The higher the `remaining_at_stop`, the more demand we have, and we might want to dispatch more buses.
 
-# %% id="GWVIBjf8Z2pK"
+# %%
 import matplotlib.pyplot as plt
 import pandas as pd
 import random
@@ -232,7 +218,7 @@ plt.xticks(rotation=45)
 plt.tight_layout()
 plt.show()
 
-# %% id="r9yRT9ZwH5U6"
+# %%
 DAYS_BACK = 90
 
 demand_per_bus_stop_df = (
@@ -278,10 +264,10 @@ plt.xticks(rotation=45)
 plt.tight_layout()
 plt.show()
 
-# %% [markdown] id="tG9QTLedfSnT"
+# %% [markdown]
 # ### Distribution of demand per Borough (boxplot)
 
-# %% id="ld9h94TofKOZ"
+# %%
 
 average_demand_per_borough = (
     bigquery_client.query(
@@ -319,10 +305,10 @@ plt.title("Demand Per Borough")
 
 plt.show()
 
-# %% [markdown] id="SFph12cCmibo"
+# %% [markdown]
 # ### Average demand per month
 
-# %% id="G-5DC96y03uE"
+# %%
 # Calculate average demand per calendar month
 average_demand_per_month = (
     bigquery_client.query(
@@ -363,10 +349,10 @@ plt.tight_layout()
 plt.show()
 
 
-# %% [markdown] id="siu6JTn9mrQK"
+# %% [markdown]
 # ### Average Demand per Day-of-Week
 
-# %% id="FBbFMM971nYk"
+# %%
 # Group average demand by day of week
 average_demand_per_day_of_week = (
     bigquery_client.query(
@@ -420,7 +406,7 @@ plt.tight_layout()
 plt.show()
 
 
-# %% [markdown] id="hfMnFM06jIyJ"
+# %% [markdown]
 # # Forecast bus ridership
 #
 # For time-series forecasting, there are 3 main options to choose from.
@@ -441,7 +427,7 @@ plt.show()
 # We will create a summarized bus_rides table, aggregate the `demand_metric` by the hour, and use the linear time gaps filling strategy to train the ARIMA_PLUS_XREG model.
 #
 
-# %% id="YDztgKflqBXV"
+# %%
 # some constants for later use
 
 ARIMA_PLUS_XREG_MODEL_NAME = "demand_arima"
@@ -468,7 +454,7 @@ ACTUAL_VS_FORECAST_TABLE_NAME = "actual_vs_forecast"
 HORIZON = int(DAYS_FORWARD_TO_FORECAST * 24 * 60 / INTERVALS_MINUTES)
 
 
-# %% id="X_Y1TjQBsVdT"
+# %%
 query = f"""
 CREATE OR REPLACE TABLE `{BQ_DATASET}`.`{SUMMARIZED_FEATURES_TABLE}` AS
 
@@ -497,13 +483,13 @@ ORDER BY time, bus_line, bus_stop_id;
 bigquery_client.query(query).result()
 
 
-# %% id="-FcJHjtlu3gJ"
+# %%
 select_top_rows(SUMMARIZED_FEATURES_TABLE)
 
-# %% [markdown] id="6F7BaDwQaECx"
+# %% [markdown]
 # ## Multivariate forecasting using the ARIMA_PLUS_XREG model
 
-# %% [markdown] id="yzogKPO25C0H"
+# %% [markdown]
 # ### Train the model
 #
 #
@@ -520,7 +506,7 @@ select_top_rows(SUMMARIZED_FEATURES_TABLE)
 # Note, we are treating each bus line, as a separate time series dataset, using the `TIME_SERIES_ID_COL` parameter.
 #
 
-# %% id="xM1y3GXljNwn"
+# %%
 query = f"""
 CREATE OR REPLACE MODEL `{BQ_DATASET}.{ARIMA_PLUS_XREG_MODEL_NAME}`
 OPTIONS(
@@ -546,15 +532,15 @@ AS SELECT
 bigquery_client.query(query).result()
 
 
-# %% [markdown] id="O4g_N5GukpKD"
+# %% [markdown]
 # ### Evaluating the ARIMA_PLUS_XREG model
 
-# %% id="0DFdjosPai9q"
+# %%
 bigquery_client.query(
     f"SELECT * FROM ML.ARIMA_EVALUATE(MODEL `{BQ_DATASET}.{ARIMA_PLUS_XREG_MODEL_NAME}`);"
 ).result().to_dataframe()
 
-# %% id="xdH7EkBSb9X8"
+# %%
 query = f"""
 SELECT *
 FROM ML.EVALUATE(MODEL `{BQ_DATASET}.{ARIMA_PLUS_XREG_MODEL_NAME}`,
@@ -566,7 +552,7 @@ FROM ML.EVALUATE(MODEL `{BQ_DATASET}.{ARIMA_PLUS_XREG_MODEL_NAME}`,
 
 bigquery_client.query(query).result().to_dataframe()
 
-# %% id="y0TFX-HRkc8x"
+# %%
 # Let's save the forecast results to a table, so we can compare the 2 models later
 query = f"""
 CREATE OR REPLACE TABLE `{BQ_DATASET}.{ARIMA_PLUS_XREG_FORECAST_TABLE_NAME}`
@@ -591,7 +577,7 @@ SELECT * FROM ML.FORECAST (
 bigquery_client.query(query).result()
 select_top_rows(ARIMA_PLUS_XREG_FORECAST_TABLE_NAME)
 
-# %% id="6NjqHE00YquO"
+# %%
 # We can even try to manually compare the forecast results with the actual requests
 # let's pick one bus line at random, and compare the forecast results during a given day to the actual results from the same day
 
@@ -647,7 +633,7 @@ INNER JOIN actual ON
 bigquery_client.query(query).result().to_dataframe()
 
 
-# %% [markdown] id="N8Fj_5qDt0CX"
+# %% [markdown]
 # ## TimesFM Model
 #
 # BigQuery's `TimesFM` is a pretrained, zero-shot foundation model for time-series forecasting. It's a decoder-only transformer model, similar to those used for language, but adapted for time series data. TimesFM was trained on a massive dataset of billions of real-world time points, which allows it to make accurate predictions on new datasets without needing any specific training on that data. This makes it highly versatile and easy for data analysts to use directly in BigQuery with a simple SQL function like `AI.FORECAST`.
@@ -656,10 +642,10 @@ bigquery_client.query(query).result().to_dataframe()
 #
 # For the `ARIMA_PLUS_XREG` has a built-in `ML.EVALUATE` function, we will simulate the same for our `TimesFM` model, and compare the results.
 
-# %% [markdown] id="4AJKzp9zv8LX"
+# %% [markdown]
 # ### Create a results table
 
-# %% id="PGuYYcBJt4UI"
+# %%
 # Create a table with the timesfm forecast
 query = f"""
 CREATE OR REPLACE TABLE `{BQ_DATASET}.{TIMESFM_TABLE_NAME}`
@@ -688,10 +674,10 @@ FROM
 bigquery_client.query(query).result()
 select_top_rows(TIMESFM_TABLE_NAME)
 
-# %% [markdown] id="ck5xk0YcwDab"
+# %% [markdown]
 # ### View results against observed results
 
-# %% id="-ZrAVATb5BkJ"
+# %%
 # Now we can review the forecast against the actual observed data
 
 query = f"""
@@ -734,10 +720,10 @@ ORDER BY forecast_timestamp
 # print(query)
 bigquery_client.query(query).result().to_dataframe()
 
-# %% [markdown] id="xHGV4emLv0I-"
+# %% [markdown]
 # ## Comparing results from both models
 
-# %% id="pvnzAC59IFsc"
+# %%
 # Finally, let's compare results of the forecast
 # between the arima model and our timesfm model
 
@@ -800,7 +786,7 @@ bigquery_client.query(query).result().to_dataframe()
 actual_vs_forecast_df = select_top_rows(ACTUAL_VS_FORECAST_TABLE_NAME)
 actual_vs_forecast_df.head()
 
-# %% id="M53P0GpL-XjL"
+# %%
 # Aggregate data for plotting
 plot_df = (
     actual_vs_forecast_df.groupby("time_bucket")
@@ -845,10 +831,10 @@ plt.grid(True)
 plt.tight_layout()
 plt.show()
 
-# %% [markdown] id="6LW15mttL7QA"
+# %% [markdown]
 # # Conclusion
 
-# %% [markdown] id="CcuS8-5QWgPP"
+# %% [markdown]
 # In this notebook, we used our open data lakehouse and connected it to BigQueryML and VertexAI to leverage native Google Cloud's capabilities to enhance our workflow, without losing mobility and freedom of our data.
 #
 # We've created tried 2 time-series forecasting models, and compared the results. We've seen the TimesFM model being the clearly better model for our demo. That should not take away from trying out more options. Even here, the ARIMA_PLUS_XREG model can still be tweaked and changed in order to improve its accuracy.

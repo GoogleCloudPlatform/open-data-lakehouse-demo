@@ -1837,7 +1837,7 @@ wheels = [
 ]
 
 [[package]]
-name = "open-data-lakehouse-demo-notebooks-and-code"
+name = "open-data-lakehouse-demo-assets"
 version = "0.1.0"
 source = { virtual = "." }
 dependencies = [

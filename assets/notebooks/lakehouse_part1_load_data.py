@@ -1,18 +1,4 @@
-# ---
-# jupyter:
-#   jupytext:
-#     text_representation:
-#       extension: .py
-#       format_name: percent
-#       format_version: '1.3'
-#       jupytext_version: 1.14.7
-#   kernelspec:
-#     display_name: Python 3 (ipykernel)
-#     language: python
-#     name: python3
-# ---
-
-# %% id="3rDg9KfcBdJP"
+# %%
 # Copyright 2025 Google LLC
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -27,7 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# %% [markdown] id="Hbol"
+# %% [markdown]
 # # Ridership Open Lakehouse Demo (Part 1): Load data to BigQuery Iceberg tables
 #
 # This notebook will demonstrate a strategy to implement an open lakehouse on GCP, using Apache Iceberg,
@@ -46,10 +32,10 @@
 #
 # All data in this notebook was prepared in the previous `part0` notebook.
 
-# %% [markdown] id="MJUe"
+# %% [markdown]
 # ## Setup the environment
 
-# %% id="vblA"
+# %%
 USER_AGENT = "cloud-solutions/data-to-ai-nb-v3"
 
 # PROJECT_ID = !gcloud config get-value project
@@ -69,10 +55,10 @@ REST_CATALOG_PREFIX = "rest_namespace"
 
 print(PROJECT_ID)
 
-# %% id="OO8ccqmVrDdd"
+# %%
 # !pip install fastavro --quiet
 
-# %% id="lEQa"
+# %%
 from google.cloud import bigquery, storage
 from google.api_core.client_info import ClientInfo
 
@@ -87,12 +73,12 @@ general_bucket = storage_client.bucket(GENERAL_BUCKET_NAME)
 print(bigquery_client.project)
 print(general_bucket.exists())
 
-# %% id="ugEQEeAtZ1n1"
+# %%
 # create/reference the bq dataset, and clean all tables
 dataset_ref = bigquery.Dataset(f"{PROJECT_ID}.{BQ_DATASET}")
 dataset_ref.location = LOCATION
 
-# %% id="DAJqwAKqaz5j"
+# %%
 # WARNING: don't auto-run this cell, it contains destructive actions
 # create/reference the bq dataset
 # deletes all the tables
@@ -101,7 +87,7 @@ dataset = bigquery_client.create_dataset(dataset_ref, exists_ok=True)
 for table in bigquery_client.list_tables(dataset):
     bigquery_client.delete_table(table)
 
-# %% id="OWx9xx9aWpGu"
+# %%
 # Some helper functions
 
 import pandas as pd
@@ -136,10 +122,10 @@ def select_top_rows(table_name: str, num_rows: int = 10):
     return bigquery_client.query(query).to_dataframe()
 
 
-# %% [markdown] id="z2TGzD069Kwp"
+# %% [markdown]
 # ## Create the tables and load data
 
-# %% [markdown] id="vyt1ywHoviSE"
+# %% [markdown]
 # ### Different types of Iceberg tables in BigQuery
 #
 # BigQuery offers two ways to work with Apache Iceberg tables:
@@ -226,13 +212,13 @@ def select_top_rows(table_name: str, num_rows: int = 10):
 # We will generate managed tables for the `bus_stations` and `ridership` datasets, while for the `bus_lines` dataset, we will write iceberg data directly to GCS, using Apache Spark, and mount the data as an external table in BigQuery.
 #
 
-# %% [markdown] id="GDsTeoKVcA2a"
+# %% [markdown]
 # ### The `bus_stations` table
 #
 # This table will be loaded as a BigQuery Iceberg table (option 2)- managed by BigQuery, read-only access to other processing engines.
 #
 
-# %% id="Xref"
+# %%
 bus_stops_prefix = f"{BQ_CATALOG_PREFIX}/bus_stations"
 bus_stops_uri = f"gs://{BQ_CATALOG_BUCKET_NAME}/{bus_stops_prefix}/"
 
@@ -268,7 +254,7 @@ bigquery_client.query(query).result()
 # We can view the GCS path, and see that there is now an ICEBERG metadata file, but no data
 display_blobs_with_prefix(BQ_CATALOG_BUCKET_NAME, bus_stops_prefix)
 
-# %% id="pzbgTsLImHtN"
+# %%
 import json
 
 # Let's review the metadata file that we have
@@ -281,12 +267,12 @@ file = list(
 metadata = file.download_as_string()
 print(json.loads(metadata.decode("utf-8")))
 
-# %% [markdown] id="Lr7eXVQicRVW"
+# %% [markdown]
 # Not much there. Just the fact that we have a table, and not much more.
 #
 # We'll now load data into the table, and see what happens.
 
-# %% id="qjUf5Qlbma05"
+# %%
 # we will now load the data from the CSV in GCS
 
 # BQ tables for Apache Iceberg do not support load with truncating, so we will truncate manually, and then load
@@ -307,11 +293,11 @@ job = bigquery_client.load_table_from_uri(
 
 job.result()
 
-# %% id="rggvYQ7ApP2N"
+# %%
 # We can verify that the data is actually loaded in the iceberg specification and the format used is parquet
 display_blobs_with_prefix(BQ_CATALOG_BUCKET_NAME, bus_stops_prefix)
 
-# %% [markdown] id="NBGqkxosXcie"
+# %% [markdown]
 # We can see in the output that we have some parquet files generated under the `iceberg_data/bus_stations/data/` folder, and one `v0.metadata.json` under the `iceberg_data/bus_stations/metadata/` folder.
 #
 # The `iceberg_data/bus_stations/data` folder, contains the `parquet` files with the actual data.
@@ -320,7 +306,7 @@ display_blobs_with_prefix(BQ_CATALOG_BUCKET_NAME, bus_stops_prefix)
 #
 # The `v0.metadata.json` file, which can have other prefixes, contains the important info for this version of the table. Let's take a quick look at this file.
 
-# %% id="Xs0MIDDxYLjI"
+# %%
 file = list(
     storage_client.list_blobs(
         BQ_CATALOG_BUCKET_NAME,
@@ -330,7 +316,7 @@ file = list(
 metadata = file.download_as_string()
 print(json.loads(metadata.decode("utf-8")))
 
-# %% [markdown] id="FO69Buz5wf4J"
+# %% [markdown]
 # Still not much there, but we'll compare this content to a file generated by our `EXTERNAL` catalog, to see the differences.
 #
 # While the data was loaded to the table, and it is available to BigQuery - currently, the fact we loaded the data, **DOES NOT** trigger a metadata refresh
@@ -339,18 +325,18 @@ print(json.loads(metadata.decode("utf-8")))
 #
 # **REMEMBER** the fact that the metadata json file isn't updated, doesn't mean that the metadata is not kept in BigQuery internal engine. We just need to trigger a metadata refresh to make the metadata available to other engines.
 
-# %% id="n0Ep6-y5nm86"
+# %%
 select_top_rows("bus_stations")
 
-# %% id="kxKg_T0OojWp"
+# %%
 # Now let's refresh the metadata
 bigquery_client.query(f"EXPORT TABLE METADATA FROM {BQ_DATASET}.bus_stations").result()
 
-# %% id="ZMC327HUo0Z-"
+# %%
 # Now let's take a closer look at the metadata folder only
 display_blobs_with_prefix(BQ_CATALOG_BUCKET_NAME, bus_stops_prefix + "/metadata")
 
-# %% [markdown] id="Rv-DM4YSpKId"
+# %% [markdown]
 # We now basically see, what happens when we create a metadata snapshot - iceberg creates a new snapshot of the metadata.
 #
 # We also see a `version-hint.text` file to help us find the most up-to-date version of the metadata.
@@ -403,7 +389,7 @@ with manifest_list_file.open("rb") as fo:
     for record in avro_reader:
         pprint(record)
 
-# %% id="Aixw99UVu-9f"
+# %%
 # We can see the metadata that was generated when we loaded the data through BigQuery
 # Number of files that we saw (parquet files)
 # rows added etc.
@@ -422,7 +408,7 @@ with avro_file.open("rb") as fo:
     for record in avro_reader:
         pprint(record)
 
-# %% [markdown] id="ofBoYgs90zqI"
+# %% [markdown]
 # So, now the picture is complete - this is how Apache iceberg can keep track on all the data in our table. We can see each data file listed here, with some metadata.
 #
 # we saw the manifest list file hold overall metadata about the snapshot of the data we took
@@ -431,7 +417,7 @@ with avro_file.open("rb") as fo:
 #
 # This is how Iceberg is able to operate, and give every processing engine a way to read the data in a unified way.
 
-# %% [markdown] id="Z5vzIsf4UnnM"
+# %% [markdown]
 # ### The `bus_lines` table
 #
 # For the `bus_lines` table, we want to simulate a table that is managed by Spark, and BigQuery is just needs to read the table.
@@ -446,7 +432,7 @@ with avro_file.open("rb") as fo:
 #
 # The first step is to create a REST catalog, using the **`biglake`** API.
 
-# %% id="GH9LHM82Vmez"
+# %%
 import json
 
 # access_token = !gcloud auth application-default print-access-token
@@ -460,7 +446,7 @@ access_token = access_token[0]
 catalog_metadata = json.loads("".join(catalog_metadata))
 catalog_metadata
 
-# %% [markdown] id="SHgBenFkecwX"
+# %% [markdown]
 # Now that we have a rest catalog, we can start up a spark session, with the required configurations
 
 # %%
@@ -522,11 +508,11 @@ df.write.format("iceberg").mode("overwrite").saveAsTable(
 )
 
 
-# %% id="H77pWZzhYjZ0"
+# %%
 # Now we can see the data written in our EXTERNAL catalog bucket.
 display_blobs_with_prefix(REST_CATALOG_BUCKET_NAME, REST_CATALOG_PREFIX)
 
-# %% [markdown] id="DQO5bIO0i46Y"
+# %% [markdown]
 # Like before, we can see a similar structure - with some differences
 #
 # - The top folder, `rest-namespace` is just a reference to the namespace we created in Spark
@@ -538,7 +524,7 @@ display_blobs_with_prefix(REST_CATALOG_BUCKET_NAME, REST_CATALOG_PREFIX)
 #
 # Now, we just need to "mount" the `bus_lines` Iceberg Data in BigQuery:
 
-# %% id="9kxivahUxGPe"
+# %%
 metadata_blob = list(
     storage_client.list_blobs(
         REST_CATALOG_BUCKET_NAME,
@@ -557,15 +543,15 @@ CREATE OR REPLACE EXTERNAL TABLE `{BQ_DATASET}.bus_lines`
 """
 ).result()
 
-# %% id="QOgaM-h_GNix"
+# %%
 # show sample rows
 select_top_rows("bus_lines")
 
-# %% id="CydSvZ5rleMq"
+# %%
 # now that we confirmed that the data is available, we're done with Spark, so we can stop the session
 spark.stop()
 
-# %% [markdown] id="BYtC"
+# %% [markdown]
 # ### The `ridership` table
 #
 # Lastly, the `ridership` table will be loaded just like the `bus_stations` table, but this time we will [cluster](https://cloud.google.com/bigquery/docs/clustered-tables) the table by the timestamp.
@@ -619,14 +605,14 @@ job.result()
 # Export the metadata
 bigquery_client.query(f"EXPORT TABLE METADATA FROM {BQ_DATASET}.ridership").result()
 
-# %% id="R3couPLLQffj"
+# %%
 # show sample rows
 select_top_rows("ridership")
 
-# %% id="Sb9SM9u6uanm"
+# %%
 display_blobs_with_prefix(BQ_CATALOG_BUCKET_NAME, ridership_prefix + "data/")
 
-# %% id="eWXX4g3vA0IR"
+# %%
 display_blobs_with_prefix(BQ_CATALOG_BUCKET_NAME, ridership_prefix + "metadata")
 
 # %% [markdown]

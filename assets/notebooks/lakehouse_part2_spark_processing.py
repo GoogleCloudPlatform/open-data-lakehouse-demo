@@ -1,18 +1,4 @@
-# ---
-# jupyter:
-#   jupytext:
-#     text_representation:
-#       extension: .py
-#       format_name: percent
-#       format_version: '1.3'
-#       jupytext_version: 1.14.7
-#   kernelspec:
-#     display_name: Python 3
-#     language: python
-#     name: python3
-# ---
-
-# %% id="bJQPVBt6OLWpJUZ1XMFjuLmo"
+# %%
 # Copyright 2025 Google LLC
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -27,7 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# %% [markdown] id="nWzii_MaWAoV"
+# %% [markdown]
 # # Ridership Open Lakehouse Demo (Part 2): Simulate Bus Rides using Apache Spark
 #
 # This notebook will demonstrate a strategy to implement an open lakehouse on GCP, using Apache Iceberg,
@@ -59,10 +45,10 @@
 # Ultimately, in a real-world scenario, you will probably have some BigQuery centric pipelines, writing down data in Managed Iceberg tables, backed in one GCS bucket, and some Spark centric pipelines, writing down data in external tables, backed by another GCS bucket. And maybe some BigQuery data, that is NOT accessible by Iceberg (like native tables, views etc.). This notebook will demonstrate the ability to access all types of data in spark, while the next notebook will demonstrate accessing all types of data in BigQuery - **A truly unified Data Lakehouse**.
 #
 
-# %% [markdown] id="ZwJxCNQ8YVNa"
+# %% [markdown]
 # ## Setup environment
 
-# %% id="t8b5qe-0v03P"
+# %%
 USER_AGENT = "cloud-solutions/data-to-ai-nb-v3"
 
 # PROJECT_ID = !gcloud config get-value project
@@ -84,7 +70,7 @@ print(PROJECT_ID)
 
 from google.api_core.client_info import ClientInfo
 
-# %% id="RjO0NIXUemk8"
+# %%
 from google.cloud import bigquery, storage
 
 # we will use the storage client only for demonstration purposes
@@ -97,7 +83,7 @@ bigquery_client = bigquery.Client(
     project=PROJECT_ID, location=LOCATION, client_info=ClientInfo(user_agent=USER_AGENT)
 )
 
-# %% id="rvqNttdsR14g"
+# %%
 # Some helper functions
 
 import pandas as pd
@@ -132,14 +118,14 @@ def select_top_rows(table_name: str, num_rows: int = 10):
     return bigquery_client.query(query).to_dataframe()
 
 
-# %% id="3PfbmvdIsyr_"
+# %%
 # we will use these imports in multiple paragraphs of this notebook
 import pyspark
 import pyspark.sql.connect.functions as f
 import pyspark.sql.types as t
 from pyspark.sql import Row
 
-# %% id="QTz61uUpus5K"
+# %%
 from google.cloud.dataproc_spark_connect import DataprocSparkSession
 from google.cloud.dataproc_v1 import Session
 
@@ -209,27 +195,27 @@ spark = (
 )
 spark.conf.set("viewsEnabled", "true")
 
-# %% [markdown] id="D5NrjhLyj7me"
+# %% [markdown]
 # ## Let's take a look around
 # We've created a spark session, with a couple of interesting connections. We're running a spark session with the spark-bigquery-connector, which gives us access to all BigQuery tables and Views, and also configured Iceberg catalogs (the one managed by BigLake, and the REST for managing external tables)
 #
 # Let's take a quick look at the **catalogs** - each containig **namespses** (also known as databases) and each namespace has **tables**. And compare the access patterns,
 
-# %% id="6Ecb-59ZMkXp"
+# %%
 # This is the default catalog, named `spark_catalog`, we can see the managed tables we have in BigQuery
 spark.sql(f"SHOW TABLES FROM spark_catalog.{BQ_DATASET};").toPandas()
 
-# %% id="19qzk6NJxKH7"
+# %%
 # Let's take a closer look at the bus_stations table, that our spark-bigquery-connector sees
 spark.sql(
     f"DESCRIBE TABLE EXTENDED spark_catalog.{BQ_DATASET}.bus_stations;"
 ).toPandas()
 
-# %% id="Dm7m4HR2NZu1"
+# %%
 # And compare that with the bus_stations table that our BigLake catalog sees
 spark.sql(f"DESCRIBE TABLE EXTENDED {bq_catalog}.{BQ_DATASET}.bus_stations;").toPandas()
 
-# %% [markdown] id="8FflM0UEOaCT"
+# %% [markdown]
 # Can you see the difference?
 #
 # There are a few differences between the 2 tables, and the way our spark reads the data. Although reading the data would produce the same logical dataset, it matters how get that data.
@@ -242,7 +228,7 @@ spark.sql(f"DESCRIBE TABLE EXTENDED {bq_catalog}.{BQ_DATASET}.bus_stations;").to
 #
 # With that in mind, let's read all the datasets required, each with a different method.
 
-# %% [markdown] id="vsqPqLS8YhHR"
+# %% [markdown]
 # ## Load data from BigQuery
 #
 # For the BigQuery managed Iceberg tables, we can use 2 methods to read the data. One is the BigQuery standard way, which defers the reading of data to the BigQuery engine. This means that BigQuery slots are being used to read the data.
@@ -251,19 +237,19 @@ spark.sql(f"DESCRIBE TABLE EXTENDED {bq_catalog}.{BQ_DATASET}.bus_stations;").to
 #
 # In the next paragraphs we will demonstrate both methods.
 
-# %% id="w6oXYjDzVKsW"
+# %%
 # Read the ridership iceberg data, from the bq catalog
 ridership_df = spark.table(f"{bq_catalog}.`{BQ_DATASET}`.ridership")
 ridership_df.printSchema()
 ridership_df.show(5)
 
-# %% id="Xq-ruiqQ4D_A"
+# %%
 # read the bus_lines data from the external catalog
 bus_lines_df = spark.table(f"{external_catalog}.`{REST_CATALOG_PREFIX}`.bus_lines")
 bus_lines_df.printSchema()
 bus_lines_df.show(5)
 
-# %% id="Bl3iCPGPIANj"
+# %%
 # To read the bus_stations data, we will use reading directly from bigquery, which uses the underlying bigquery-spark connector and uses bigquery slots to read
 bus_stations_df = spark.read.format("bigquery").load(
     f"{PROJECT_ID}.{BQ_DATASET}.bus_stations"
@@ -271,14 +257,14 @@ bus_stations_df = spark.read.format("bigquery").load(
 bus_stations_df.printSchema()
 bus_stations_df.show(5)
 
-# %% [markdown] id="uuNx-12gYwcQ"
+# %% [markdown]
 # ## Prepare bus data to be joined with stations ridership
 #
 # Our initial `ridership` table refers to passengers waiting at bus stations, along with minute-by-minute timestamps.
 #
 # In order to generate bus trips, picking up passengers along the way, we need to understand what are the available time ranges that we can simulate bus riders, then start simulating trips, from station to station.
 
-# %% id="HK0qlEp46nQx"
+# %%
 # 1. Calculate min and max transit_timestamp for each station_id
 station_time_summary_df = ridership_df.groupBy("station_id").agg(
     f.min("transit_timestamp").alias("min_station_timestamp"),
@@ -286,7 +272,7 @@ station_time_summary_df = ridership_df.groupBy("station_id").agg(
 )
 station_time_summary_df.show(5)
 
-# %% id="zYlqYY_n6mip"
+# %%
 # 2. Explode the 'stops' array in bus_lines_df to get each station_id on a new row
 exploded_bus_stops_df = bus_lines_df.withColumn("station_id", f.explode("stops"))
 
@@ -309,15 +295,15 @@ bus_line_overall_times_df = bus_lines_with_station_times.groupBy("bus_line_id").
 # this will show us for each bus line, the time ranges in which we can simulate rides
 bus_line_overall_times_df.show(10)
 
-# %% id="Toh8J9nS1Qnz"
+# %%
 # join back to the full bus line data, to get the full context of each bus line
 bus_lines_with_min_max = bus_line_overall_times_df.join(bus_lines_df, on="bus_line_id")
 bus_lines_with_min_max.show(10)
 
-# %% [markdown] id="lvgpzy5LbHfF"
+# %% [markdown]
 # ## Simulate bus trips - without passengers (for now)
 
-# %% id="CwdE8s1z1lHS"
+# %%
 from typing import List, Tuple
 from datetime import datetime, timedelta
 import random
@@ -435,12 +421,12 @@ bus_rides = bus_lines_with_min_max.select(
 
 bus_rides.show(10)
 
-# %% [markdown] id="pSbAjla4r6bR"
+# %% [markdown]
 # ## Join with ridership data
 #
 # This is a short section, to join the `ridership` df, allowing us to see how many passengers are in each station of a trip, by bus_stop and timestamp
 
-# %% id="Mp620fstyTRn"
+# %%
 # join with the ridership data, by each station_id and the timestamp
 bus_rides_with_ridership = bus_rides.alias("rides").join(
     ridership_df.alias("ridership"),
@@ -459,10 +445,10 @@ bus_rides_with_ridership = (
 bus_rides_with_ridership.cache()
 bus_rides_with_ridership.show(10)
 
-# %% id="Gh0VvW-f7wkD"
+# %%
 bus_rides_with_ridership.printSchema()
 
-# %% [markdown] id="w6uKurclsQqo"
+# %% [markdown]
 # ## Aggregate passengers
 #
 # This section will aggregate for each ride, passengers from each station, taking into consideration the passengers "alighting" or  leaving the bus, and the overall bus capacity.
@@ -474,7 +460,7 @@ bus_rides_with_ridership.printSchema()
 # - `remaining_at_stop`: number of passengers who have no more room left and have to wait at the stop for the next bus
 # - `total_passengers`: number of passengers on the bus, after boarding and alighting.
 
-# %% id="pGoWARrtkpXp"
+# %%
 import pandas as pd
 
 # Define the schema for the output of the Pandas UDF
@@ -596,10 +582,10 @@ bus_rides_with_riders_and_totals = bus_rides_with_ridership.groupBy(
 bus_rides_with_riders_and_totals.show(10, truncate=False)
 bus_rides_with_riders_and_totals.printSchema()
 
-# %% [markdown] id="PmA42JP2vORp"
+# %% [markdown]
 # ## Store results to bigquery
 
-# %% id="1qRROmbUvUgS"
+# %%
 TABLE_NAME = "bus_rides"
 
 # drop an existing table, if needed
@@ -610,7 +596,7 @@ bigquery_client.delete_table(
 delete_blobs_with_prefix(BQ_CATALOG_BUCKET_NAME, bus_rides_prefix)
 display_blobs_with_prefix(BQ_CATALOG_BUCKET_NAME, bus_rides_prefix)
 
-# %% id="N-_xAQMqvYr9"
+# %%
 bus_rides_uri = f"gs://{BQ_CATALOG_BUCKET_NAME}/{bus_rides_prefix}/"
 
 fields = bus_rides_with_riders_and_totals.schema.fields
@@ -635,18 +621,18 @@ OPTIONS (
 """
 bigquery_client.query(query).result()
 
-# %% id="_Eue5yezpmM4"
+# %%
 display_blobs_with_prefix(BQ_CATALOG_BUCKET_NAME, bus_rides_prefix)
 
-# %% id="_V342-bis5qQ"
+# %%
 # save the bus_rides_with_riders_and_totals dataframe to bigquery, with iceberg format
 bus_rides_with_riders_and_totals.write.format("bigquery").mode("overwrite").option(
     "table", f"{PROJECT_ID}.{BQ_DATASET}.{TABLE_NAME}"
 ).save()
 
 
-# %% id="LSZcQp_6aFgL"
+# %%
 display_blobs_with_prefix(BQ_CATALOG_BUCKET_NAME, bus_rides_prefix)
 
-# %% id="-gOiqF1Ya82X"
+# %%
 select_top_rows(TABLE_NAME)
