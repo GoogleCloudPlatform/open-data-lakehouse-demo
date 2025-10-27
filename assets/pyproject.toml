@@ -33,10 +33,10 @@ dependencies = [
 dev = [
     "black>=25.9.0",
     "jupytext>=1.18.1",
+    "nbstripout>=0.8.1",
     "pre-commit>=4.3.0",
 ]
 
 [tool.jupytext]
 formats = "ipynb,py:percent"
-notebook_metadata_filter = "-all"
-cell_metadata_filter = "-all"
+
