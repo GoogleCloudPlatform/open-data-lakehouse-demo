@@ -230,23 +230,13 @@ display_blobs_with_prefix(BQ_CATALOG_BUCKET_NAME, bus_stops_prefix)
 # drop the table
 bigquery_client.query(f"DROP TABLE IF EXISTS {BQ_DATASET}.bus_stations;").result()
 
-# create the table
+# TASK: complete the query to create a managed table, backed by apache iceberg catalog.
+# Investigate the CSV file  under your GCS bucket with path `staged-data/bus_stations.csv
+# and remember that the staged-data file, is different from our bus_stops_uri variable, as the latter points to where the iceberg data WILL reside,
+# after we load the data
 query = f"""
-CREATE TABLE {BQ_DATASET}.bus_stations
-(
-  bus_stop_id INTEGER,
-  address STRING,
-  school_zone BOOLEAN,
-  seating BOOLEAN,
-  borough STRING,
-  latitude FLOAT64,
-  longitude FLOAT64
-)
-WITH CONNECTION `{PROJECT_ID}.{LOCATION}.{BQ_CONNECTION_NAME}`
-OPTIONS (
-  file_format = 'PARQUET',
-  table_format = 'ICEBERG',
-  storage_uri = '{bus_stops_uri}');
+
+
 """
 bigquery_client.query(query).result()
 
@@ -457,40 +447,10 @@ session = Session()
 
 catalog_name = "external_catalog"
 
-session.runtime_config.properties[
-    f"spark.sql.catalog.{catalog_name}"
-] = "org.apache.iceberg.spark.SparkCatalog"
-session.runtime_config.properties[f"spark.sql.catalog.{catalog_name}.type"] = "rest"
-session.runtime_config.properties[
-    f"spark.sql.catalog.{catalog_name}.uri"
-] = "https://biglake.googleapis.com/iceberg/v1/restcatalog"
-session.runtime_config.properties[
-    f"spark.sql.catalog.{catalog_name}.warehouse"
-] = f"gs://{REST_CATALOG_BUCKET_NAME}"
-session.runtime_config.properties[
-    f"spark.sql.catalog.{catalog_name}.header.x-goog-user-project"
-] = PROJECT_ID
-session.runtime_config.properties[
-    f"spark.sql.catalog.{catalog_name}.rest.auth.type"
-] = "org.apache.iceberg.gcp.auth.GoogleAuthManager"
-session.runtime_config.properties[
-    f"spark.sql.catalog.{catalog_name}.io-impl"
-] = "org.apache.iceberg.gcp.gcs.GCSFileIO"
-session.runtime_config.properties[
-    f"spark.sql.catalog.{catalog_name}.rest-metrics-reporting-enabled"
-] = "false"
-session.runtime_config.properties[
-    "spark.sql.extensions"
-] = "org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions"
-session.runtime_config.properties["spark.sql.defaultCatalog"] = catalog_name
-
-
-# Create the Spark session. This will take some time.
-spark: DataprocSparkSession = (
-    DataprocSparkSession.builder.appName("mount-bus-lines")
-    .dataprocSessionConfig(session)
-    .getOrCreate()
-)
+# TASK using the dataproc serverless interactive session, create a spark session, with the configuration for using the REST iceberg catalog.
+# Use https://cloud.google.com/bigquery/docs/blms-rest-catalog as a reference,
+# and use the `session.runtime_config.properties` dict to set properties for the spark session
+spark: DataprocSparkSession = ...
 
 # %%
 # In spark, we need to create a namespace to work with our catalog.
@@ -565,19 +525,18 @@ delete_blobs_with_prefix(BQ_CATALOG_BUCKET_NAME, ridership_prefix)
 
 bigquery_client.query(f"DROP TABLE IF EXISTS {BQ_DATASET}.ridership;").result()
 
+# TASK - As before, create another managed table in BigQuery, based on apache iceberg format
+# with one added clause, to cluster the data by the field `transit_timestamp`
+# Since the data files are in parquet format, and seeing the data structure might be difficult,
+# we will tell you that the schema of the data files, contains 3 fields:
+# 1. transit_timestamp (TIMESTAMP)
+# 2. station_id (INTEGER)
+# 3. ridership (INTEGER)
+
 _create_table_stmt = f"""
-    CREATE TABLE {BQ_DATASET}.ridership (
-        transit_timestamp TIMESTAMP,
-        station_id INTEGER,
-        ridership INTEGER
-    )
-    CLUSTER BY transit_timestamp
-    WITH CONNECTION `{PROJECT_ID}.{LOCATION}.{BQ_CONNECTION_NAME}`
-    OPTIONS (
-        file_format = 'PARQUET',
-        table_format = 'ICEBERG',
-        storage_uri = '{ridership_uri}'
-    );
+
+
+
 """
 bigquery_client.query(_create_table_stmt).result()
 
