@@ -1,18 +1,4 @@
-# ---
-# jupyter:
-#   jupytext:
-#     text_representation:
-#       extension: .py
-#       format_name: percent
-#       format_version: '1.3'
-#       jupytext_version: 1.14.7
-#   kernelspec:
-#     display_name: Python 3 (ipykernel)
-#     language: python
-#     name: python3
-# ---
-
-# %% executionInfo={"elapsed": 7, "status": "ok", "timestamp": 1758537292149, "user": {"displayName": "", "userId": ""}, "user_tz": -120} id="VWe8czCUjv5V"
+# %%
 # Copyright 2025 Google LLC
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -27,7 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# %% [markdown] id="MJUe"
+# %% [markdown]
 # # Ridership Open Lakehouse Demo (Part 0): Generating our datasets
 #
 # This notebook will demonstrate a strategy to implement an open lakehouse on GCP, using Apache Iceberg,
@@ -40,10 +26,10 @@
 #
 # Rest of the data is being randomly generated inside the notebook.
 
-# %% [markdown] id="vblA"
+# %% [markdown]
 # ## Setup the environment
 
-# %% colab={"base_uri": "https://localhost:8080/"} executionInfo={"elapsed": 1416, "status": "ok", "timestamp": 1758537293559, "user": {"displayName": "", "userId": ""}, "user_tz": -120} id="bkHC" outputId="8d2e432b-2af8-40e6-b8a1-a3ce1a849d1a"
+# %%
 import os
 
 USER_AGENT = "cloud-solutions/data-to-ai-nb-v3"
@@ -58,10 +44,10 @@ BQ_CONNECTION_NAME = "cloud-resources-connection"
 print(PROJECT_ID)
 print(BUCKET_NAME)
 
-# %% colab={"base_uri": "https://localhost:8080/"} executionInfo={"elapsed": 8835, "status": "ok", "timestamp": 1758537302392, "user": {"displayName": "", "userId": ""}, "user_tz": -120} id="OA7d79AKI5O9" outputId="35f7bcdc-0ed6-4b11-bf77-15c5d6286a03"
+# %%
 # !pip install faker sodapy --quiet
 
-# %% executionInfo={"elapsed": 4029, "status": "ok", "timestamp": 1758537306418, "user": {"displayName": "", "userId": ""}, "user_tz": -120} id="lEQa"
+# %%
 from google.cloud import bigquery, storage
 from google.api_core.client_info import ClientInfo
 from google.cloud import exceptions
@@ -73,12 +59,12 @@ storage_client = storage.Client(
     project=PROJECT_ID, client_info=ClientInfo(user_agent=USER_AGENT)
 )
 
-# %% executionInfo={"elapsed": 5, "status": "ok", "timestamp": 1758537306418, "user": {"displayName": "", "userId": ""}, "user_tz": -120} id="qTAC3-bB4YM_"
+# %%
 dataset = bigquery.Dataset(f"{PROJECT_ID}.{STAGING_BQ_DATASET}")
 dataset.location = LOCATION
 dataset = bigquery_client.create_dataset(dataset, exists_ok=True)
 
-# %% [markdown] id="PKri"
+# %% [markdown]
 # ## MTA Data - PLEASE READ!
 #
 # This part is tricky - this is the raw data from the MTA subways of new york.
@@ -104,7 +90,7 @@ dataset = bigquery_client.create_dataset(dataset, exists_ok=True)
 #
 # happy thoughts!
 
-# %% executionInfo={"elapsed": 5, "status": "ok", "timestamp": 1758537306418, "user": {"displayName": "", "userId": ""}, "user_tz": -120} id="Xref"
+# %%
 from csv import DictWriter
 from sodapy import Socrata
 
@@ -194,7 +180,7 @@ def programmatically_download_mta_data():
     # TODO: implement code to upload the local CSV to GCS
 
 
-# %% colab={"base_uri": "https://localhost:8080/"} executionInfo={"elapsed": 4, "status": "ok", "timestamp": 1758537306418, "user": {"displayName": "", "userId": ""}, "user_tz": -120} id="SFPL" outputId="5fe1e4c8-c713-4c9b-963f-cfad7645c407"
+# %%
 # This should be a path pointing to the file in GCS.
 MTA_RAW_CSV_PATH_IN_GCS = (
     "mta-raw/mta-manual-downloaded-data_MTA_Subway_Hourly_Ridership.csv"
@@ -211,7 +197,7 @@ else:
         f"Path '{MTA_RAW_CSV}' doesn't appear to point to a valid GCS object"
     )
 
-# %% colab={"base_uri": "https://localhost:8080/"} executionInfo={"elapsed": 24337, "status": "ok", "timestamp": 1758537330752, "user": {"displayName": "", "userId": ""}, "user_tz": -120} id="BYtC" outputId="b44a930f-7bfc-4280-edcc-47e75fe7f7b2"
+# %%
 # Load raw data to a BQ, to continue transformation of the data
 # Due to its size, it will be easier to load data to bq and transform it there
 
@@ -252,7 +238,7 @@ load_job.result()
 print("created {}.{}".format(STAGING_BQ_DATASET, BQ_TABLE))
 
 
-# %% [markdown] id="RGSE"
+# %% [markdown]
 # ### The `mta_data_stations` table
 #
 # the raw data has a non-normalized dataset, where each station appear in full detail, for each hourly data point
@@ -260,7 +246,7 @@ print("created {}.{}".format(STAGING_BQ_DATASET, BQ_TABLE))
 #
 # note, we are saving the results to a pandas dataframe, to be used later
 
-# %% colab={"base_uri": "https://localhost:8080/", "height": 424} executionInfo={"elapsed": 9226, "status": "ok", "timestamp": 1758537339975, "user": {"displayName": "", "userId": ""}, "user_tz": -120} id="Kclp" outputId="b4c94e96-f33b-4cab-ea04-3a0ebbfb7265"
+# %%
 bigquery_client.query(
     f"DROP TABLE IF EXISTS {STAGING_BQ_DATASET}.mta_data_stations;"
 ).result()
@@ -291,12 +277,12 @@ stations_df = bigquery_client.query(
 ).to_dataframe()
 stations_df
 
-# %% [markdown] id="emfo"
+# %% [markdown]
 # ### The `mta_data_parsed` table - temporary table
 #
 # This table is a temporary table to hold an hourly data points, with parsed timestamps and station IDs as integers.
 
-# %% colab={"base_uri": "https://localhost:8080/", "height": 677} executionInfo={"elapsed": 7914, "status": "ok", "timestamp": 1758537347885, "user": {"displayName": "", "userId": ""}, "user_tz": -120} id="Hstk" outputId="909f6f7e-506b-4143-d82b-5d2b805e4800"
+# %%
 bigquery_client.query(
     f"DROP TABLE IF EXISTS {STAGING_BQ_DATASET}.mta_data_parsed;"
 ).result()
@@ -316,12 +302,12 @@ bigquery_client.query(
     f"SELECT * FROM {STAGING_BQ_DATASET}.mta_data_parsed LIMIT 20;"
 ).to_dataframe()
 
-# %% [markdown] id="nWHF"
+# %% [markdown]
 # ### The `ridership` table
 #
 # This is the output table to hold minute-by-minute data points, spreading each hour evenly between 60 minutes within the hour.
 
-# %% colab={"base_uri": "https://localhost:8080/", "height": 677} executionInfo={"elapsed": 34916, "status": "ok", "timestamp": 1758537382799, "user": {"displayName": "", "userId": ""}, "user_tz": -120} id="iLit" outputId="a2827d33-1c01-4602-e345-8920a12478af"
+# %%
 bigquery_client.query(f"DROP TABLE IF EXISTS {STAGING_BQ_DATASET}.ridership;").result()
 _query = f"""
     CREATE TABLE `{STAGING_BQ_DATASET}.ridership` AS
@@ -344,7 +330,7 @@ bigquery_client.query(
     f"SELECT * FROM {STAGING_BQ_DATASET}.ridership LIMIT 20;"
 ).to_dataframe()
 
-# %% colab={"base_uri": "https://localhost:8080/", "height": 53} executionInfo={"elapsed": 6803, "status": "ok", "timestamp": 1758537389599, "user": {"displayName": "", "userId": ""}, "user_tz": -120} id="ZHCJ" outputId="04e93738-fe82-40d9-ff6f-7c39da7da244"
+# %%
 # This query is just a verification that the sum of each hour in our minute-by-minute data equals to the data in
 # the temporary hourly data
 # The query re-aggregates the data by hour, and compars to the original hourly data
@@ -371,7 +357,7 @@ _query = f"""
     WHERE minutly_agg.ridership_agg != parsed.ridership"""
 bigquery_client.query(_query).to_dataframe()
 
-# %% [markdown] id="ROlb"
+# %% [markdown]
 # ## Generate fake data for bus lines and bus stops (routes)
 #
 # This is based on the stations data in thr original dataset, but the station addresses are faked (using faker),
@@ -380,7 +366,7 @@ bigquery_client.query(_query).to_dataframe()
 #
 # We will then load the faked data into BigQuery, in order to create time windows of the ridership (that represents people waiting in stations) to simulate bus riders, accumulating riders into a bus driving through their stations.
 
-# %% colab={"base_uri": "https://localhost:8080/"} executionInfo={"elapsed": 5, "status": "ok", "timestamp": 1758537389599, "user": {"displayName": "", "userId": ""}, "user_tz": -120} id="qnkX" outputId="ffcfb16b-8dfe-4e4a-99f3-ae2f3950ab17"
+# %%
 from faker import Faker
 import numpy as np
 
@@ -429,7 +415,7 @@ print(
     f"Anonymized {len(fake_stations_lst)} bus_stations. The first stations for the random bus line above is: {next(filter(lambda x: x['bus_stop_id'] == random_bus_line['stops'][0], fake_stations_lst))}"
 )
 
-# %% executionInfo={"elapsed": 4, "status": "ok", "timestamp": 1758537389600, "user": {"displayName": "", "userId": ""}, "user_tz": -120} id="DnEU"
+# %%
 with open("bus_stations.csv", "w") as fp:
     writer = DictWriter(fp, fieldnames=fake_stations_lst[0].keys())
     writer.writeheader()
@@ -442,10 +428,10 @@ with open("bus_lines.json", "w") as fp:
         json.dump(line, fp)
         fp.write("\n")
 
-# %% [markdown] id="m5m0O2tMetRL"
+# %% [markdown]
 # we will load the `bus_lines` to BigQuery as an ICEBERG table, and then export it with the ICEBERG manifest and data files. This will enable us to simulate in the next notebook to mount ICEBERG tables coming from external sources.
 
-# %% colab={"base_uri": "https://localhost:8080/"} executionInfo={"elapsed": 3416, "status": "ok", "timestamp": 1758537393012, "user": {"displayName": "", "userId": ""}, "user_tz": -120} id="YPyFRmVQgNaP" outputId="0c32b680-05f0-49fa-b21b-acf9acd99c5e"
+# %%
 bus_lines_schema = [
     SchemaField("bus_line_id", "INTEGER"),
     SchemaField("bus_line", "STRING"),
@@ -474,7 +460,7 @@ with open("bus_lines.json", "rb") as fp:
 
 print("created {}.{}".format(STAGING_BQ_DATASET, BQ_TABLE))
 
-# %% colab={"base_uri": "https://localhost:8080/"} executionInfo={"elapsed": 3541, "status": "ok", "timestamp": 1758537396550, "user": {"displayName": "", "userId": ""}, "user_tz": -120} id="DKiM43tr95a8" outputId="101c4b66-483d-401f-89ea-d09e945e8a6b"
+# %%
 bus_stations_schema = [
     SchemaField("bus_stop_id", "INTEGER"),
     SchemaField("address", "STRING"),
@@ -507,7 +493,7 @@ with open("bus_stations.csv", "rb") as fp:
 print("created {}.{}".format(STAGING_BQ_DATASET, BQ_TABLE))
 
 
-# %% [markdown] id="TqIu"
+# %% [markdown]
 # ## Extract data to GCS
 #
 # Now, that we have all data we need, the data needs to reside in BigQuery & GCS, we will extract the BigQuery tables to GCS, so we can load them in the next notebook, where we build the open source data lakehouse.
@@ -518,14 +504,14 @@ print("created {}.{}".format(STAGING_BQ_DATASET, BQ_TABLE))
 #
 # - `ridership` - this table is the largest by far (972,829,500 rows). We will export this table to parquet format to be loaded as a managed iceberg table.
 
-# %% executionInfo={"elapsed": 4, "status": "ok", "timestamp": 1758537396550, "user": {"displayName": "", "userId": ""}, "user_tz": -120} id="QB9PSo-keP9j"
+# %%
 # bus stations
 bus_stations_blob = bucket.blob("mta_staging_data/bus_stations.csv")
 if bus_stations_blob.exists():
     bus_stations_blob.delete()
 bus_stations_blob.upload_from_filename("bus_stations.csv")
 
-# %% colab={"base_uri": "https://localhost:8080/"} executionInfo={"elapsed": 1413, "status": "ok", "timestamp": 1758537397960, "user": {"displayName": "", "userId": ""}, "user_tz": -120} id="ulZA" outputId="d993da33-1852-4bf1-bbef-baf44665ee3e"
+# %%
 from google.cloud.bigquery import ExtractJobConfig
 
 target_glob = "mta_staging_data/bus_lines"
@@ -544,7 +530,7 @@ extract_job = bigquery_client.extract_table(
 )
 extract_job.result()
 
-# %% colab={"base_uri": "https://localhost:8080/"} executionInfo={"elapsed": 5575, "status": "ok", "timestamp": 1758537403534, "user": {"displayName": "", "userId": ""}, "user_tz": -120} id="Vxnm" outputId="0e5e3399-c43e-4186-fd0f-14350fc64ee1"
+# %%
 target_glob = "mta_staging_data/ridership"
 destination_uri = "gs://{}/{}/*.parquet".format(BUCKET_NAME, target_glob)
 
@@ -561,7 +547,7 @@ extract_job = bigquery_client.extract_table(
 )
 extract_job.result()
 
-# %% executionInfo={"elapsed": 3, "status": "ok", "timestamp": 1758537403534, "user": {"displayName": "", "userId": ""}, "user_tz": -120} id="ecfG"
+# %%
 try:
     for table in bigquery_client.list_tables(dataset):
         bigquery_client.delete_table(table)

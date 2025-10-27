@@ -21,7 +21,7 @@ jobs:
           pip install jupytext nbstripout
       - name: Check for notebook and script synchronization
         run: |
-          jupytext --check 'notebooks/*.ipynb'
+          jupytext --test **/*.ipynb --to py:percent
       - name: Check for stripped outputs
         run: |
-          nbstripout --verify notebooks/*.ipynb
+          nbstripout --verify **/*.ipynb
