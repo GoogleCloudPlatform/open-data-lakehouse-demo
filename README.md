@@ -113,3 +113,25 @@ This will make code reviews a much more friendly experience.
 When working the notebooks, pay attention that the notebooks outputs have to be cleared manually. The jupytext
 pre-commit hook clashes with other potential hooks that would clear the outputs, as they change the notebooks, which
 causes a loop between hooks.
+
+### GitHub Actions
+
+There is also a GitHub actions that checks for 2 things on every PR to the `main` or `workshop` branches:
+
+1. Checks with jupytext for synced pairs. This should be ok, as long as the pre-commit hook was installed correctly, as
+   unsynced changes can't be commited. if needed, you can run the following command from your `assets` directory using
+   `uv`:
+
+  ```bash
+  uv run jupytext --sync --to py:percent
+  ```
+
+2. Another check to verify all outputs are stripped from the ipynb files, using `nbstripout`. This causes issues when
+   integrated into the pre-commit hook, as described above. If this check fails on the PR, you can run this command from
+   your `assets` directory using `uv`:
+
+  ```bash
+  uv run nbstripout **/*.ipynb;
+  ```
+
+These actions are **testing** the files, not changing anything on the PR.
