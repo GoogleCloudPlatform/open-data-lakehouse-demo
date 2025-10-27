@@ -24,4 +24,4 @@ jobs:
           jupytext --test **/*.ipynb --to py:percent
       - name: Check for stripped outputs
         run: |
-          nbstripout --verify **/*.ipynb
+          nbstripout --verify assets/notebooks/*.ipynb
