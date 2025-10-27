@@ -1,4 +1,4 @@
-name: CI
+name: notebooks-check-on-pr
 
 on:
   pull_request:
