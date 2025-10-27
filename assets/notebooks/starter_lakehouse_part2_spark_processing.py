@@ -239,22 +239,24 @@ spark.sql(f"DESCRIBE TABLE EXTENDED {bq_catalog}.{BQ_DATASET}.bus_stations;").to
 # In the next paragraphs we will demonstrate both methods.
 
 # %%
-# Read the ridership iceberg data, from the bq catalog
-ridership_df = spark.table(f"{bq_catalog}.`{BQ_DATASET}`.ridership")
+# Task 1: Create a variable named `ridership_df` and load into it the content of the `ridership` table,
+# using the BigQuery managed catalog (`bq_catalog`)
+
+ridership_df: pyspark.sql.connect.dataframe.DataFrame = ...
 ridership_df.printSchema()
 ridership_df.show(5)
 
 # %%
-# read the bus_lines data from the external catalog
-bus_lines_df = spark.table(f"{external_catalog}.`{REST_CATALOG_PREFIX}`.bus_lines")
+# Task 2: Create a variable named `bus_lines_df` and load into it the content of the `bus_lines` table,
+# using the REST Catalog (`rest_catalog`)
+bus_lines_df: pyspark.sql.connect.dataframe.DataFrame = ...
 bus_lines_df.printSchema()
 bus_lines_df.show(5)
 
 # %%
-# To read the bus_stations data, we will use reading directly from bigquery, which uses the underlying bigquery-spark connector and uses bigquery slots to read
-bus_stations_df = spark.read.format("bigquery").load(
-    f"{PROJECT_ID}.{BQ_DATASET}.bus_stations"
-)
+# Task 3: Create a variable named `bus_stations_df` and load into it the content of the `bus_stations` table,
+# using the BigQuery connector (format is "bigquery", catalog is `spark_catalog`)
+bus_stations_df: pyspark.sql.connect.dataframe.DataFrame = ...
 bus_stations_df.printSchema()
 bus_stations_df.show(5)
 

@@ -94,25 +94,11 @@ resource "google_storage_bucket_object" "notebooks_assets" {
 }
 
 resource "google_storage_bucket_object" "code_assets" {
-<<<<<<< HEAD
   for_each       = fileset("${path.module}/../assets/code", "**")
   bucket         = google_storage_bucket.data_lakehouse_bucket.name
   name           = "code/${each.value}"
   source         = "${path.module}/../assets/code/${each.value}"
   source_md5hash = filemd5("${path.module}/../assets/code/${each.value}")
-||||||| parent of 7536705 (Use rest catalog for workshop (#17))
-  for_each = fileset("${path.module}/../notebooks_and_code", "**")
-  bucket = google_storage_bucket.data_lakehouse_bucket.name
-  name   = "notebooks_and_code/${each.value}"
-  source = "${path.module}/../notebooks_and_code/${each.value}"
-  source_md5hash = filemd5("${path.module}/../notebooks_and_code/${each.value}")
-=======
-  for_each       = fileset("${path.module}/../notebooks_and_code", "**")
-  bucket         = google_storage_bucket.data_lakehouse_bucket.name
-  name           = "notebooks_and_code/${each.value}"
-  source         = "${path.module}/../notebooks_and_code/${each.value}"
-  source_md5hash = filemd5("${path.module}/../notebooks_and_code/${each.value}")
->>>>>>> 7536705 (Use rest catalog for workshop (#17))
 }
 
 

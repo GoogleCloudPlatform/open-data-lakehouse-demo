@@ -507,17 +507,20 @@ select_top_rows(SUMMARIZED_FEATURES_TABLE)
 #
 
 # %%
+# Task - use the `CREATE OR REPLACE MODEL` query, to train the ARIMA_PLUS_XREG` model
+# remember some constant variables were defined before, like `ARIMA_PLUS_XREG_MODEL_NAME`
+# `HORIZON`, `MIN_TS` and `MAX_TS`
+
+# remember: we are trying to predict the `demand` column value,
+# for each of the series ids of `bus_line` and `bus_stop_id`.
+# The frequency can usually be left at `auto_frequency` as we have already used the
+# fill_gap function to make sure there is not skipped data.
+
+# if the training takes too long for the workshop, cancel the run from the bigquery console, and reduce the time range
 query = f"""
 CREATE OR REPLACE MODEL `{BQ_DATASET}.{ARIMA_PLUS_XREG_MODEL_NAME}`
 OPTIONS(
-  MODEL_TYPE = 'ARIMA_PLUS_XREG',
-  TIME_SERIES_ID_COL = ['bus_line', 'bus_stop_id'],
-  TIME_SERIES_DATA_COL = 'demand',
-  TIME_SERIES_TIMESTAMP_COL = 'time',
-  AUTO_ARIMA=TRUE,
-  HORIZON={HORIZON},
-  DATA_FREQUENCY='AUTO_FREQUENCY',
-  HOLIDAY_REGION = "US"  -- the original dataset is from NY
+  -- fill in here
 )
 AS SELECT
     time,
@@ -646,29 +649,10 @@ bigquery_client.query(query).result().to_dataframe()
 # ### Create a results table
 
 # %%
-# Create a table with the timesfm forecast
+# TASK Create a table with the timesfm forecast of our target variable `demand`
 query = f"""
 CREATE OR REPLACE TABLE `{BQ_DATASET}.{TIMESFM_TABLE_NAME}`
 AS
-SELECT *
-FROM
-  AI.FORECAST(
-    (
-      SELECT
-        time,
-        bus_line,
-        bus_stop_id,
-        borough,
-        demand
-      FROM `{BQ_DATASET}.summarized_features`
-      WHERE
-        time BETWEEN TIMESTAMP('{MIN_TS}') AND TIMESTAMP('{MAX_TS}')
-    ),
-    horizon => {HORIZON},
-    confidence_level => 0.95,
-    id_cols => ['bus_line', 'bus_stop_id'],
-    timestamp_col => 'time',
-    data_col => 'demand');
 """
 
 bigquery_client.query(query).result()
