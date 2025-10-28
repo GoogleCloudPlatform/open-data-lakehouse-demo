@@ -1,0 +1,27 @@
+name: notebooks-check-on-pr
+
+on:
+  pull_request:
+    branches:
+      - main
+      - workshop
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.x'
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install jupytext nbstripout
+      - name: Check for notebook and script synchronization
+        run: |
+          jupytext --test **/*.ipynb --to py:percent
+      - name: Check for stripped outputs
+        run: |
+          nbstripout --verify assets/notebooks/*.ipynb

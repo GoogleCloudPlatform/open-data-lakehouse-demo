@@ -55,7 +55,7 @@ crash.*.log
 *.tfvars.json
 
 terraform/.terraform.lock.hcl
-**/__marimo__/
-**/__marimo__/*
 
-src/open_data_lakehouse_demo.egg-info
+**/*.egg-info
+
+**/.ipynb_checkpoints

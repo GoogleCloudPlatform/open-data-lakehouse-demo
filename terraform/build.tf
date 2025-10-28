@@ -14,11 +14,11 @@
 
 
 locals {
-  artifact_repo      = "open-lakehouse-demo-docker-repo"
-  image_name         = "open-lakehouse-demo-webapp"
-  cloud_build_fileset = fileset(path.module, "../src/**")
+  artifact_repo            = "open-lakehouse-demo-docker-repo"
+  image_name               = "open-lakehouse-demo-webapp"
+  cloud_build_fileset      = fileset(path.module, "../webapp/**")
   cloud_build_content_hash = sha512(join("", [for f in local.cloud_build_fileset : filesha512("${path.module}/${f}")]))
-  image_name_and_tag = "${var.region}-docker.pkg.dev/${var.project_id}/${local.artifact_repo}/${local.image_name}:latest"
+  image_name_and_tag       = "${var.region}-docker.pkg.dev/${var.project_id}/${local.artifact_repo}/${local.image_name}:latest"
 }
 
 resource "google_artifact_registry_repository" "docker_repo" {
@@ -32,7 +32,7 @@ resource "google_artifact_registry_repository" "docker_repo" {
 module "cloud_build_account" {
   source     = "github.com/terraform-google-modules/terraform-google-service-accounts"
   project_id = var.project_id
-  names = ["cloud-build"]
+  names      = ["cloud-build"]
   project_roles = [
     "${var.project_id}=>roles/logging.logWriter",
     "${var.project_id}=>roles/storage.admin",
@@ -57,10 +57,10 @@ resource "time_sleep" "wait_for_policy_propagation" {
 
 # See github.com/terraform-google-modules/terraform-google-gcloud
 module "gcloud_build_webapp" {
-  source = "github.com/terraform-google-modules/terraform-google-gcloud" # commit hash of version 3.5.0
+  source                = "github.com/terraform-google-modules/terraform-google-gcloud" # commit hash of version 3.5.0
   create_cmd_entrypoint = "gcloud"
   create_cmd_body       = <<-EOT
-    builds submit ${path.module}/../src \
+    builds submit ${path.module}/../webapp \
       --tag ${local.image_name_and_tag} \
       --project ${var.project_id} \
       --region ${var.region} \
