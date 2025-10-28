@@ -1,8 +1,8 @@
 # %% [markdown]
 # # Setup notebook - read before you run!!
-# This notebooks is a short-hand replacement for the `terraform` scripts in the repo. Running this ntoebook will setup the bare minimum resources on your project, in order to run notebooks 0-3.
+# This notebook is a shorthand replacement for the `terraform` scripts in the repo. Running this notebook will set up the bare minimum resources on your project, in order to run notebooks 0-3.
 #
-# If you already ran or are running the `terrafom` scripts - **DO NOT RUN THIS NOTEBOOOK!!!**
+# If you already ran or are running the `terraform` scripts - **DO NOT RUN THIS NOTEBOOK!!!**
 #
 # The runtime for this notebook requires a VPC already been created with at least 1 subnet and enabled for `Private Google Access` as well as access to the internet.
 #
@@ -78,9 +78,7 @@ from google.cloud import bigquery, storage
 bigquery_client = bigquery.Client()
 storage_client = storage.Client()
 
-
 # %%
-
 for b in [GENERAL_BUCKET_NAME, BQ_CATALOG_BUCKET_NAME, REST_CATALOG_BUCKET_NAME]:
     bucket = storage_client.bucket(b)
     if not bucket.exists():
@@ -90,7 +88,6 @@ for b in [GENERAL_BUCKET_NAME, BQ_CATALOG_BUCKET_NAME, REST_CATALOG_BUCKET_NAME]
 dataset_ref = bigquery.Dataset(f"{PROJECT_ID}.{BQ_DATASET}")
 dataset_ref.location = LOCATION
 dataset = bigquery_client.create_dataset(dataset_ref, exists_ok=True)
-
 
 # %%
 # !gsutil -m rsync -r gs://data-lakehouse-demo-data-assets/  gs://{GENERAL_BUCKET_NAME}/
