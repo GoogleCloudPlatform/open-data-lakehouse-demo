@@ -96,23 +96,18 @@ In this repo, you will find the following folders:
 
 ## Development
 
-In the `assets` and the `webapp` folders, use `uv` to install the virtual environments.
+In the `assets` and the `webapp` folders, use `uv` to install the virtual environments for each of these sub-projects.
 
-For the `assets` environment, pay attention to the dev dependencies, and install the pre-hooks before commiting:
+When working with the notebooks, pay attention that the notebooks outputs have to be cleared, and the contents needs to
+synced with matching `py` files.
+To do so, there are 2 tools that are installed as a `dev` group:
 
-```bash
-cd assets 
-uv sync
-uv run pre-commit install
-```
+1. [jupytext](https://jupytext.readthedocs.io/en/latest/) for syncing content between `ipynb` files
+   and `py` files
+2. [nbstripout](https://github.com/kynan/nbstripout) that can be triggered to clean outputs from ipynb files.
 
-The jupytext and black pre-commit hooks will now be triggered whenever you commit a change to the notebooks, and convert
-those changes to the paired `.py` files.
-This will make code reviews a much more friendly experience.
-
-When working the notebooks, pay attention that the notebooks outputs have to be cleared manually. The jupytext
-pre-commit hook clashes with other potential hooks that would clear the outputs, as they change the notebooks, which
-causes a loop between hooks.
+There is a `clean.sh` file that is recommended to run before creating a PR, as these things are being checked on every
+PR.
 
 ### GitHub Actions
 

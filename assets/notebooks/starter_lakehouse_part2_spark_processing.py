@@ -137,56 +137,56 @@ external_catalog = "external_catalog"
 bq_catalog = "bq_catalog"
 
 # here, we're setting the options for the external catalog, where the tables are managed by spark, and read-only for bq
-session.runtime_config.properties[
-    f"spark.sql.catalog.{external_catalog}"
-] = "org.apache.iceberg.spark.SparkCatalog"
+session.runtime_config.properties[f"spark.sql.catalog.{external_catalog}"] = (
+    "org.apache.iceberg.spark.SparkCatalog"
+)
 session.runtime_config.properties[f"spark.sql.catalog.{external_catalog}.type"] = "rest"
-session.runtime_config.properties[
-    f"spark.sql.catalog.{external_catalog}.uri"
-] = "https://biglake.googleapis.com/iceberg/v1/restcatalog"
-session.runtime_config.properties[
-    f"spark.sql.catalog.{external_catalog}.warehouse"
-] = f"gs://{REST_CATALOG_BUCKET_NAME}"
+session.runtime_config.properties[f"spark.sql.catalog.{external_catalog}.uri"] = (
+    "https://biglake.googleapis.com/iceberg/v1/restcatalog"
+)
+session.runtime_config.properties[f"spark.sql.catalog.{external_catalog}.warehouse"] = (
+    f"gs://{REST_CATALOG_BUCKET_NAME}"
+)
 session.runtime_config.properties[
     f"spark.sql.catalog.{external_catalog}.header.x-goog-user-project"
 ] = PROJECT_ID
 session.runtime_config.properties[
     f"spark.sql.catalog.{external_catalog}.rest.auth.type"
 ] = "org.apache.iceberg.gcp.auth.GoogleAuthManager"
-session.runtime_config.properties[
-    f"spark.sql.catalog.{external_catalog}.io-impl"
-] = "org.apache.iceberg.gcp.gcs.GCSFileIO"
+session.runtime_config.properties[f"spark.sql.catalog.{external_catalog}.io-impl"] = (
+    "org.apache.iceberg.gcp.gcs.GCSFileIO"
+)
 session.runtime_config.properties[
     f"spark.sql.catalog.{external_catalog}.rest-metrics-reporting-enabled"
 ] = "false"
 
 # here, we're setting the options for the bigquery catalog, where the tables are managed by bigquery, and read-only for spark
-session.runtime_config.properties[
-    f"spark.sql.catalog.{bq_catalog}"
-] = "org.apache.iceberg.spark.SparkCatalog"
-session.runtime_config.properties[
-    f"spark.sql.catalog.{bq_catalog}.catalog-impl"
-] = "org.apache.iceberg.gcp.bigquery.BigQueryMetastoreCatalog"
-session.runtime_config.properties[
-    f"spark.sql.catalog.{bq_catalog}.gcp_project"
-] = PROJECT_ID
-session.runtime_config.properties[
-    f"spark.sql.catalog.{bq_catalog}.gcp_location"
-] = LOCATION
-session.runtime_config.properties[
-    f"spark.sql.catalog.{bq_catalog}.warehouse"
-] = f"gs://{BQ_CATALOG_BUCKET_NAME}"
+session.runtime_config.properties[f"spark.sql.catalog.{bq_catalog}"] = (
+    "org.apache.iceberg.spark.SparkCatalog"
+)
+session.runtime_config.properties[f"spark.sql.catalog.{bq_catalog}.catalog-impl"] = (
+    "org.apache.iceberg.gcp.bigquery.BigQueryMetastoreCatalog"
+)
+session.runtime_config.properties[f"spark.sql.catalog.{bq_catalog}.gcp_project"] = (
+    PROJECT_ID
+)
+session.runtime_config.properties[f"spark.sql.catalog.{bq_catalog}.gcp_location"] = (
+    LOCATION
+)
+session.runtime_config.properties[f"spark.sql.catalog.{bq_catalog}.warehouse"] = (
+    f"gs://{BQ_CATALOG_BUCKET_NAME}"
+)
 
 # general packages and configuration
-session.runtime_config.properties[
-    "spark.jars.packages"
-] = "org.apache.iceberg:iceberg-spark-runtime-3.5_2.12:1.10.0,org.apache.iceberg:iceberg-gcp-bundle:1.10.0"
-session.runtime_config.properties[
-    "spark.jars"
-] = "https://storage.googleapis.com/spark-lib/bigquery/spark-bigquery-with-dependencies_2.12-0.42.1.jar"
-session.runtime_config.properties[
-    "spark.sql.extensions"
-] = "org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions"
+session.runtime_config.properties["spark.jars.packages"] = (
+    "org.apache.iceberg:iceberg-spark-runtime-3.5_2.12:1.10.0,org.apache.iceberg:iceberg-gcp-bundle:1.10.0"
+)
+session.runtime_config.properties["spark.jars"] = (
+    "https://storage.googleapis.com/spark-lib/bigquery/spark-bigquery-with-dependencies_2.12-0.42.1.jar"
+)
+session.runtime_config.properties["spark.sql.extensions"] = (
+    "org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions"
+)
 
 # Create the Spark session. This will take some time.
 spark = (

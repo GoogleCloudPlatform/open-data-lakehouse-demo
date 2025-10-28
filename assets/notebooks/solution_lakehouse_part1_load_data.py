@@ -457,31 +457,31 @@ session = Session()
 
 catalog_name = "external_catalog"
 
-session.runtime_config.properties[
-    f"spark.sql.catalog.{catalog_name}"
-] = "org.apache.iceberg.spark.SparkCatalog"
+session.runtime_config.properties[f"spark.sql.catalog.{catalog_name}"] = (
+    "org.apache.iceberg.spark.SparkCatalog"
+)
 session.runtime_config.properties[f"spark.sql.catalog.{catalog_name}.type"] = "rest"
-session.runtime_config.properties[
-    f"spark.sql.catalog.{catalog_name}.uri"
-] = "https://biglake.googleapis.com/iceberg/v1/restcatalog"
-session.runtime_config.properties[
-    f"spark.sql.catalog.{catalog_name}.warehouse"
-] = f"gs://{REST_CATALOG_BUCKET_NAME}"
+session.runtime_config.properties[f"spark.sql.catalog.{catalog_name}.uri"] = (
+    "https://biglake.googleapis.com/iceberg/v1/restcatalog"
+)
+session.runtime_config.properties[f"spark.sql.catalog.{catalog_name}.warehouse"] = (
+    f"gs://{REST_CATALOG_BUCKET_NAME}"
+)
 session.runtime_config.properties[
     f"spark.sql.catalog.{catalog_name}.header.x-goog-user-project"
 ] = PROJECT_ID
 session.runtime_config.properties[
     f"spark.sql.catalog.{catalog_name}.rest.auth.type"
 ] = "org.apache.iceberg.gcp.auth.GoogleAuthManager"
-session.runtime_config.properties[
-    f"spark.sql.catalog.{catalog_name}.io-impl"
-] = "org.apache.iceberg.gcp.gcs.GCSFileIO"
+session.runtime_config.properties[f"spark.sql.catalog.{catalog_name}.io-impl"] = (
+    "org.apache.iceberg.gcp.gcs.GCSFileIO"
+)
 session.runtime_config.properties[
     f"spark.sql.catalog.{catalog_name}.rest-metrics-reporting-enabled"
 ] = "false"
-session.runtime_config.properties[
-    "spark.sql.extensions"
-] = "org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions"
+session.runtime_config.properties["spark.sql.extensions"] = (
+    "org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions"
+)
 session.runtime_config.properties["spark.sql.defaultCatalog"] = catalog_name
 
 
