@@ -34,7 +34,6 @@ dev = [
     "black>=25.9.0",
     "jupytext>=1.18.1",
     "nbstripout>=0.8.1",
-    "pre-commit>=4.3.0",
 ]
 
 [tool.jupytext]
