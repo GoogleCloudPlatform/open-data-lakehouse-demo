@@ -55,29 +55,25 @@ resource "time_sleep" "wait_for_policy_propagation" {
   ]
 }
 
-# See github.com/terraform-google-modules/terraform-google-gcloud
-module "gcloud_build_webapp" {
-  source                = "github.com/terraform-google-modules/terraform-google-gcloud" # commit hash of version 3.5.0
-  create_cmd_entrypoint = "gcloud"
-  create_cmd_body       = <<-EOT
-    builds submit ${path.module}/../webapp \
-      --tag ${local.image_name_and_tag} \
-      --project ${var.project_id} \
-      --region ${var.region} \
-      --default-buckets-behavior regional-user-owned-bucket \
-      --service-account "projects/${var.project_id}/serviceAccounts/${module.cloud_build_account.email}"
-  EOT
-  enabled               = true
+# This resource runs the build-webapp script
+resource "null_resource" "run_build_webapp" {
+  provisioner "local-exec" {
+    command = "${path.module}/scripts/build-webapp.sh"
 
-  create_cmd_triggers = {
+    # Optional: Pass Terraform data to the script as environment variables
+    environment = {
+      TAG             = local.image_name_and_tag
+      PROJECT_ID      = data.google_project.project.project_id
+      REGION          = var.region
+      SERVICE_ACCOUNT = "projects/${var.project_id}/serviceAccounts/${module.cloud_build_account.email}"
+    }
+  }
+  triggers = {
     source_contents_hash = local.cloud_build_content_hash
+    always_run           = timestamp()
   }
 
-  # Commenting the dependency for the wait command - the gcloud module has a bug when specifying explicit dependenceis
-  # This means that the first build might fail, since the IAM permissions hasn't cascaded yet.
-  # depends_on = [
-  #   module.wait_for_policy_propagation
-  # ]
+  depends_on = [
+    time_sleep.wait_for_policy_propagation
+  ]
 }
-
-

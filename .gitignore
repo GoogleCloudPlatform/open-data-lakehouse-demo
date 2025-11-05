@@ -35,13 +35,18 @@ node_modules/
 # Local image assets for dev/test
 .assets/
 
+# Ignore all environments except the example-env
+terraform/environments/**
+!terraform/environments/example-env
+!terraform/environments/example-env/**
+
 # Local .terraform directories
 **/.terraform
 **/.terraform/*
 
 # .tfstate files
-*.tfstate
-*.tfstate.*
+**/*.tfstate
+**/*.tfstate.*
 
 # Crash log files
 crash.log

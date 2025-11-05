@@ -11,18 +11,3 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
-# This resource runs the script
-resource "null_resource" "run_copy_script" {
-  provisioner "local-exec" {
-    command = "${path.module}/scripts/copy-data.sh"
-
-    # Optional: Pass Terraform data to the script as environment variables
-    environment = {
-      BUCKET_NAME = google_storage_bucket.data_lakehouse_bucket.name
-    }
-  }
-  triggers = {
-    always_run = timestamp()
-  }
-}
