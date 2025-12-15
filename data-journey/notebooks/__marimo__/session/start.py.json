@@ -1,0 +1,33 @@
+{
+  "version": "1",
+  "metadata": {
+    "marimo_version": "0.18.1"
+  },
+  "cells": [
+    {
+      "id": "MJUe",
+      "code_hash": "104b08ca5b7fd3ce7a72f44fa2310c37",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/markdown": "<span class=\"markdown prose dark:prose-invert contents\"><h1 id=\"welcome-to-the-data-journey\">Welcome to the Data Journey</h1></span>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "Hbol",
+      "code_hash": "1d0db38904205bec4d6f6f6a1f6cec3e",
+      "outputs": [],
+      "console": []
+    },
+    {
+      "id": "vblA",
+      "code_hash": "62c7afc767d1579cd0f58eadf5d78560",
+      "outputs": [],
+      "console": []
+    }
+  ]
+}

@@ -1,0 +1,518 @@
+{
+  "version": "1",
+  "metadata": {
+    "marimo_version": "0.18.1"
+  },
+  "cells": [
+    {
+      "id": "MJUe",
+      "code_hash": "78c69ad517bb992f523a00e0acd12265",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/markdown": "<span class=\"markdown prose dark:prose-invert contents\"><h1 id=\"ridership-open-lakehouse-demo-part-1-load-data-to-bigquery-iceberg-tables\">Ridership Open Lakehouse Demo (Part 1): Load data to BigQuery Iceberg tables</h1>\n<span class=\"paragraph\">This notebook will demonstrate a strategy to implement an open lakehouse on GCP, using Apache Iceberg,\nas an open source standard for managing data, while still leveraging GCP native capabilities. This demo will use\nBigQuery Manged Iceberg Tables, Managed Apache Kafka and Apache Kafka Connect to ingest streaming data, Vertex AI for Generative AI queries on top of the data and Dataplex to govern tables.</span>\n<span class=\"paragraph\">This notebook will load data into BigQuery, backed by Parquet files, in the Apache Iceberg specification.</span>\n<span class=\"paragraph\">If you created the demo, using our terraform scripts, you should be able to access the data files under the <code>&lt;YOUR_PROJECT_ID&gt;-ridership-lakehouse</code> bucket, as the terraform script copies over the data files from a publicly available bucket <code>gs://data-lakehouse-demo-data-assets/staged-data/</code>.</span>\n<span class=\"paragraph\">If you haven't created this demo using our terraform scripts, the easiest way to get a hold of the data would be to run the following <code>gsutil</code> command:</span>\n<div class=\"language-bash codehilite\"><pre><span></span><code>gsutil<span class=\"w\"> </span>-m<span class=\"w\"> </span>rsync<span class=\"w\"> </span>-r<span class=\"w\"> </span>gs://data-lakehouse-demo-data-assets/<span class=\"w\">  </span>gs://&lt;YOUR_BUCKET_NAME&gt;/\n</code></pre></div>\n<span class=\"paragraph\">All data in this notebook was prepared in the previous <code>part0</code> notebook.</span></span>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "bkHC",
+      "code_hash": "a00098afae420be0cb94123d89442a0b",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/markdown": "<span class=\"markdown prose dark:prose-invert contents\"><h2 id=\"create-the-tables-and-load-data\">Create the tables and load data</h2></span>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "lEQa",
+      "code_hash": "ec0cbb6d92791d2c3893a80463025d0a",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/markdown": "<span class=\"markdown prose dark:prose-invert contents\"><h3 id=\"different-types-of-iceberg-tables-in-bigquery\">Different types of Iceberg tables in BigQuery</h3>\n<span class=\"paragraph\">BigQuery offers two ways to work with Apache Iceberg tables:</span>\n<ol>\n<li><strong><a href=\"https://cloud.google.com/bigquery/docs/iceberg-tables#create-iceberg-tables\" rel=\"noopener\" target=\"_blank\">BigQuery Tables for Apache Iceberg</a></strong>.</li>\n<li><strong><a href=\"https://cloud.google.com/bigquery/docs/blms-rest-catalog\" rel=\"noopener\" target=\"_blank\">BigLake metastore with the Iceberg REST catalog</a></strong></li>\n</ol>\n<span class=\"paragraph\">For most migration and native BigQuery use cases, <strong>BigQuery Tables for Apache Iceberg (managed by BigQuery) is the strongly preferred method.</strong></span>\n<hr />\n<span class=\"paragraph\"><strong>1. BigQuery Tables for Apache Iceberg (Managed by BigQuery)</strong></span>\n<span class=\"paragraph\"><strong>This is the recommended approach for migrating your data and integrating Iceberg within BigQuery.</strong> These tables offer full BigQuery management of Iceberg, eliminating the need for a separate catalog.</span>\n<span class=\"paragraph\"><strong>SQL Example:</strong></span>\n<div class=\"language-sql codehilite\"><pre><span></span><code><span class=\"k\">CREATE</span><span class=\"w\"> </span><span class=\"k\">OR</span><span class=\"w\"> </span><span class=\"k\">REPLACE</span><span class=\"w\"> </span><span class=\"k\">TABLE</span><span class=\"w\"> </span><span class=\"o\">`</span><span class=\"n\">your</span><span class=\"o\">-</span><span class=\"n\">project</span><span class=\"p\">.</span><span class=\"n\">your_dataset</span><span class=\"p\">.</span><span class=\"n\">your_iceberg_table</span><span class=\"o\">`</span><span class=\"p\">(</span>\n<span class=\"w\">    </span><span class=\"o\">&lt;</span><span class=\"n\">column_definition</span><span class=\"o\">&gt;</span>\n<span class=\"p\">)</span>\n<span class=\"k\">WITH</span><span class=\"w\"> </span><span class=\"k\">CONNECTION</span><span class=\"w\"> </span><span class=\"o\">`</span><span class=\"n\">your</span><span class=\"o\">-</span><span class=\"n\">region</span><span class=\"p\">.</span><span class=\"n\">your_connection_name</span><span class=\"o\">`</span>\n<span class=\"k\">OPTIONS</span><span class=\"w\"> </span><span class=\"p\">(</span>\n<span class=\"w\">    </span><span class=\"n\">file_format</span><span class=\"w\"> </span><span class=\"o\">=</span><span class=\"w\"> </span><span class=\"s1\">&#39;PARQUET&#39;</span><span class=\"p\">,</span>\n<span class=\"w\">    </span><span class=\"n\">table_format</span><span class=\"w\"> </span><span class=\"o\">=</span><span class=\"w\"> </span><span class=\"s1\">&#39;ICEBERG&#39;</span><span class=\"p\">,</span>\n<span class=\"w\">    </span><span class=\"n\">storage_uri</span><span class=\"w\"> </span><span class=\"o\">=</span><span class=\"w\"> </span><span class=\"s1\">&#39;gs://your-bucket/iceberg/your_table_name&#39;</span>\n<span class=\"p\">);</span>\n</code></pre></div>\n<span class=\"paragraph\"><strong>Why should you prefer Managed Tables:</strong></span>\n<span class=\"paragraph\">BigQuery-managed Iceberg tables unlock powerful features essential for modern data solutions:</span>\n<span class=\"paragraph\">* <strong>Native Integration:</strong> Seamless experience, similar to standard BigQuery tables.</span>\n<span class=\"paragraph\">* <strong>Full DML Support:</strong> Perform <code>INSERT</code>, <code>UPDATE</code>, <code>DELETE</code>, <code>MERGE</code> directly with GoogleSQL.</span>\n<span class=\"paragraph\">* <strong>Unified Ingestion:</strong> Supports both batch and high-throughput streaming via the Storage Write API.</span>\n<span class=\"paragraph\">* <strong>Schema Evolution:</strong> BigQuery handles schema changes (add, drop, rename columns, type changes) effortlessly.</span>\n<span class=\"paragraph\">* <strong>Automatic Optimization:</strong> Benefits from BigQuery's built-in optimizations like adaptive file sizing, clustering, and garbage collection.</span>\n<span class=\"paragraph\">* <strong>Robust Security:</strong> Leverage BigQuery's column-level security and data masking.</span>\n<span class=\"paragraph\">* <strong>Simplified Operations:</strong> Reduced overhead by letting BigQuery manage the Iceberg table lifecycle.</span>\n<span class=\"paragraph\">This method provides a more robust, integrated, and efficient way to leverage Iceberg data within the BigQuery ecosystem.</span>\n<hr />\n<span class=\"paragraph\"><strong>2. BigLake metastore with the Iceberg REST catalog</strong></span>\n<span class=\"paragraph\">These tables allow BigQuery to query Iceberg data managed by external systems like Spark or Hive. They are best for hybrid setups where multiple tools need read access and an external system controls the table's lifecycle.</span>\n<span class=\"paragraph\"><strong>SQL Example:</strong></span>\n<div class=\"language-sql codehilite\"><pre><span></span><code><span class=\"k\">CREATE</span><span class=\"w\"> </span><span class=\"k\">OR</span><span class=\"w\"> </span><span class=\"k\">REPLACE</span><span class=\"w\"> </span><span class=\"k\">EXTERNAL</span><span class=\"w\"> </span><span class=\"k\">TABLE</span><span class=\"w\"> </span><span class=\"o\">`</span><span class=\"n\">your</span><span class=\"o\">-</span><span class=\"n\">project</span><span class=\"p\">.</span><span class=\"n\">your_dataset</span><span class=\"p\">.</span><span class=\"n\">your_external_iceberg_table</span><span class=\"o\">`</span>\n<span class=\"w\">  </span><span class=\"k\">WITH</span><span class=\"w\"> </span><span class=\"k\">CONNECTION</span><span class=\"w\"> </span><span class=\"o\">`</span><span class=\"n\">your</span><span class=\"o\">-</span><span class=\"n\">region</span><span class=\"p\">.</span><span class=\"n\">your_connection_name</span><span class=\"o\">`</span>\n<span class=\"w\">  </span><span class=\"k\">OPTIONS</span><span class=\"w\"> </span><span class=\"p\">(</span>\n<span class=\"w\">         </span><span class=\"n\">format</span><span class=\"w\"> </span><span class=\"o\">=</span><span class=\"w\"> </span><span class=\"s1\">&#39;ICEBERG&#39;</span><span class=\"p\">,</span>\n<span class=\"w\">         </span><span class=\"n\">uris</span><span class=\"w\"> </span><span class=\"o\">=</span><span class=\"w\"> </span><span class=\"p\">[</span><span class=\"ss\">&quot;gs://mybucket/mydata/mytable/metadata/iceberg.metadata.json&quot;</span><span class=\"p\">]</span>\n<span class=\"w\">   </span><span class=\"p\">)</span>\n</code></pre></div>\n<span class=\"paragraph\"><strong>Key Points:</strong></span>\n<span class=\"paragraph\">* <strong>External Control:</strong> Metadata and data managed outside BigQuery.</span>\n<span class=\"paragraph\">* <strong>Read-Only:</strong> BigQuery can only query; DML operations are not supported.</span>\n<span class=\"paragraph\">* <strong>Hybrid Fit:</strong> Ideal for shared access from various tools.</span>\n<span class=\"paragraph\">* <strong>Metadata:</strong> Manual updates for static JSON pointers; BigLake Metastore preferred for dynamic syncing in GCP.</span>\n<h4 id=\"how-to-choose\">How to Choose?</h4>\n<span class=\"paragraph\">Generally, to leverage the most out of you Iceberg data, prefer the managed tables. They provide better integration and automatic optimization.</span>\n<span class=\"paragraph\">If you have BigQuery centric pipelines, with data generated by BigQuery, managed iceberg tables are the obvious choice.</span>\n<span class=\"paragraph\">Choose external tables, if you have spark centric pipelines (or another external engine) that generate and write Iceberg data in GCS, and BigQuery only requires read-only access.</span>\n<span class=\"paragraph\">In a real world scenario, you will probably have some of both, so a truly unified data platform would have a mixture of both tables.</span>\n<span class=\"paragraph\">In this notebook, we will create the 2 different types of tables, to demonstrate that the 2 methods can be combined according to your needs.</span>\n<span class=\"paragraph\">We will generate managed tables for the <code>bus_stations</code> and <code>ridership</code> datasets, while for the <code>bus_lines</code> dataset, we will write iceberg data directly to GCS, using Apache Spark, and mount the data as an external table in BigQuery.</span></span>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "PKri",
+      "code_hash": "d459e7df82009949384f582e4bd7be2c",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/markdown": "<span class=\"markdown prose dark:prose-invert contents\"><h3 id=\"the-bus_stations-table\">The <code>bus_stations</code> table</h3>\n<span class=\"paragraph\">This table will be loaded as a BigQuery Iceberg table (option 2)- managed by BigQuery, read-only access to other processing engines.</span></span>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "Kclp",
+      "code_hash": "c4a9c663707f29e4c4051dd242af4c84",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/markdown": "<span class=\"markdown prose dark:prose-invert contents\"><span class=\"paragraph\">Not much there. Just the fact that we have a table, and not much more.</span>\n<span class=\"paragraph\">We'll now load data into the table, and see what happens.</span></span>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "nWHF",
+      "code_hash": "83ff0ae91b2e8726f65fc93beb049b4b",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/markdown": "<span class=\"markdown prose dark:prose-invert contents\"><span class=\"paragraph\">We can see in the output that we have some parquet files generated under the <code>iceberg_data/bus_stations/data/</code> folder, and one <code>v0.metadata.json</code> under the <code>iceberg_data/bus_stations/metadata/</code> folder.</span>\n<span class=\"paragraph\">The <code>iceberg_data/bus_stations/data</code> folder, contains the <code>parquet</code> files with the actual data.</span>\n<span class=\"paragraph\">The <code>iceberg_data/bus_stations/metadata</code> folder contains the metadata files - currently only one - but more data will be in there, as our tables evolve (schema changes, rollbacks etc.).</span>\n<span class=\"paragraph\">The <code>v0.metadata.json</code> file, which can have other prefixes, contains the important info for this version of the table. Let's take a quick look at this file.</span></span>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "ZHCJ",
+      "code_hash": "5074a219cf628acbe6758a07e7438d7b",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/markdown": "<span class=\"markdown prose dark:prose-invert contents\"><span class=\"paragraph\">Still not much there, but we'll compare this content to a file generated by our <code>EXTERNAL</code> catalog, to see the differences.</span>\n<span class=\"paragraph\">While the data was loaded to the table, and it is available to BigQuery - currently, the fact we loaded the data, <strong>DOES NOT</strong> trigger a metadata refresh</span>\n<span class=\"paragraph\">So, let's verify that the data is available, and then trigger a metadata refresh.</span>\n<span class=\"paragraph\"><strong>REMEMBER</strong> the fact that the metadata json file isn't updated, doesn't mean that the metadata is not kept in BigQuery internal engine. We just need to trigger a metadata refresh to make the metadata available to other engines.</span></span>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "Vxnm",
+      "code_hash": "c1fc1c8f1678fb6297f4b273260e5a02",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/markdown": "<span class=\"markdown prose dark:prose-invert contents\"><span class=\"paragraph\">We now basically see, what happens when we create a metadata snapshot - iceberg creates a new snapshot of the metadata.</span>\n<span class=\"paragraph\">We also see a <code>version-hint.text</code> file to help us find the most up-to-date version of the metadata.</span>\n<span class=\"paragraph\">Let's take a closer look:</span></span>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "Pvdt",
+      "code_hash": "400362fdc7029d4f0a1025da24b87378",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/markdown": "<span class=\"markdown prose dark:prose-invert contents\"><span class=\"paragraph\">So, now the picture is complete - this is how Apache iceberg can keep track on all the data in our table. We can see each data file listed here, with some metadata.</span>\n<span class=\"paragraph\">we saw the manifest list file hold overall metadata about the snapshot of the data we took</span>\n<span class=\"paragraph\">and saw how it is all connected in the <code>json</code> file.</span>\n<span class=\"paragraph\">This is how Iceberg is able to operate, and give every processing engine a way to read the data in a unified way.</span></span>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "ZBYS",
+      "code_hash": "9790b57447314258dbb24a945078dfef",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/markdown": "<span class=\"markdown prose dark:prose-invert contents\"><h3 id=\"the-bus_lines-table\">The <code>bus_lines</code> table</h3>\n<span class=\"paragraph\">For the <code>bus_lines</code> table, we want to simulate a table that is managed by Spark, and BigQuery is just needs to read the table.</span>\n<span class=\"paragraph\">For that we will use the <code>EXTERNAL</code> Iceberg tables (method 2), managed by OSS engines, read-only by BigQuery.</span>\n<span class=\"paragraph\">To simulate that, we will start a PySpark process to read the data from the staged bucket, and write it back in Iceberg format to another bucket</span>\n<span class=\"paragraph\">Then mount the data in a BigQuery external table.</span>\n<span class=\"paragraph\">We will also look at the Iceberg metadata generated by spark, which will show us the similarities to the BigQuery metadata we just saw.</span>\n<span class=\"paragraph\">The first step is to create a REST catalog, using the <strong><code>biglake</code></strong> API.</span></span>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "nHfw",
+      "code_hash": "20fe41031edc9c4a132f92f76e284270",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/markdown": "<span class=\"markdown prose dark:prose-invert contents\"><span class=\"paragraph\">Now that we have a rest catalog, we can start up a spark session, with the required configurations</span></span>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "NCOB",
+      "code_hash": "ddc696074d83311aa773afdeb7da1def",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/markdown": "<span class=\"markdown prose dark:prose-invert contents\"><span class=\"paragraph\">Like before, we can see a similar structure - with some differences</span>\n<ul>\n<li>The top folder, <code>rest-namespace</code> is just a reference to the namespace we created in Spark</li>\n<li>Under the namespace <code>rest-namespace</code>, we can see a <code>bus_lines</code> folder, referencing our table, and then the familiar structure of a <code>data</code> folder, and a <code>metadata</code> folder.</li>\n<li>The files under the <code>data</code> folder, are still <code>parquet</code> files</li>\n<li>The files under the <code>metadata</code> folder looks slightly different, since Spark was the one creating them, and not BQ, but their purpose is the same. we can repeat the process of reading the json file, which will point to the <code>snap-</code> avro file, and so on and so on.</li>\n</ul>\n<span class=\"paragraph\">Iceberg is the layer that enables interoperability between processing engines.</span>\n<span class=\"paragraph\">Now, we just need to \"mount\" the <code>bus_lines</code> Iceberg Data in BigQuery:</span></span>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "dNNg",
+      "code_hash": "648d700f25b2e535d12968bd81615043",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/markdown": "<span class=\"markdown prose dark:prose-invert contents\"><h3 id=\"the-ridership-table\">The <code>ridership</code> table</h3>\n<span class=\"paragraph\">Lastly, the <code>ridership</code> table will be loaded just like the <code>bus_stations</code> table, but this time we will <a href=\"https://cloud.google.com/bigquery/docs/clustered-tables\" rel=\"noopener\" target=\"_blank\">cluster</a> the table by the timestamp.</span></span>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "dGlV",
+      "code_hash": "21a89899cf3b02eb71fd9b9771c6fe8f",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/markdown": "<span class=\"markdown prose dark:prose-invert contents\"><h1 id=\"conclusion\">Conclusion</h1>\n<span class=\"paragraph\">In this notebook, we created our tables, loaded data - and observed what happens on GCS when managing Iceberg tables either by BigQuery or by other engines like Spark.</span>\n<span class=\"paragraph\">We saw the metadata and examined how Iceberg keeps pointer to the actual data and manages schemas and metadata.</span>\n<span class=\"paragraph\">In the next notebook, we will use Apache Spark to do some data processing, and focus our attention on how to read data from the different catalogs, and the pros and cons for each method of reading the data.</span></span>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "setup",
+      "code_hash": "a4e5725be97733b9418e9a76714efa8f",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/plain": ""
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "Hbol",
+      "code_hash": "12c13ec6fbf3a71ce5628e7a978d79bb",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/plain": ""
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "vblA",
+      "code_hash": "4e8447e55b22b78ae08c6446477a71b5",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/html": "<pre class='text-xs'>Dataset(DatasetReference(&#x27;lakehouse-demo-7000&#x27;, &#x27;ridership_lakehouse&#x27;))</pre>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "Xref",
+      "code_hash": "8005410647a91ef8fd92fee78f2174cd",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/html": "<marimo-ui-element object-id='Xref-0' random-id='3d33d54b-53d9-719c-7283-7a0275d48a9a'><marimo-table data-initial-value='[]' data-label='null' data-data='&quot;[]&quot;' data-total-rows='0' data-total-columns='4' data-max-columns='50' data-banner-text='&quot;&quot;' data-pagination='true' data-page-size='10' data-field-types='[[&quot;Name&quot;,[&quot;string&quot;,&quot;object&quot;]],[&quot;Size&quot;,[&quot;string&quot;,&quot;object&quot;]],[&quot;Content Type&quot;,[&quot;string&quot;,&quot;object&quot;]],[&quot;Updated&quot;,[&quot;string&quot;,&quot;object&quot;]]]' data-show-filters='true' data-show-download='true' data-show-column-summaries='false' data-show-data-types='true' data-show-page-size-selector='false' data-show-column-explorer='true' data-show-chart-builder='true' data-row-headers='[]' data-has-stable-row-id='false' data-lazy='false' data-preload='false'></marimo-table></marimo-ui-element>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "SFPL",
+      "code_hash": "a82cb5cf28736ae44234bf1b8e66738c",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/html": "<pre class='text-xs'>&lt;google.cloud.bigquery.table._EmptyRowIterator object at 0x7fbc32f41a90&gt;</pre>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "BYtC",
+      "code_hash": "158bc2bb28c99c0049e13c9684165992",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/html": "<marimo-ui-element object-id='BYtC-0' random-id='76b0c2a4-cc49-2301-e5a8-718faaec5c11'><marimo-table data-initial-value='[]' data-label='null' data-data='&quot;[{&#92;&quot;Name&#92;&quot;:&#92;&quot;bq_namespace/bus_stations/metadata/v0.metadata.json&#92;&quot;,&#92;&quot;Size&#92;&quot;:116,&#92;&quot;Content Type&#92;&quot;:&#92;&quot;application/json&#92;&quot;,&#92;&quot;Updated&#92;&quot;:&#92;&quot;2025-12-05 09:31:03.461000+00:00&#92;&quot;}]&quot;' data-total-rows='1' data-total-columns='4' data-max-columns='50' data-banner-text='&quot;&quot;' data-pagination='true' data-page-size='10' data-field-types='[[&quot;Name&quot;,[&quot;string&quot;,&quot;object&quot;]],[&quot;Size&quot;,[&quot;integer&quot;,&quot;int64&quot;]],[&quot;Content Type&quot;,[&quot;string&quot;,&quot;object&quot;]],[&quot;Updated&quot;,[&quot;datetime&quot;,&quot;datetime64[ns, UTC]&quot;]]]' data-show-filters='true' data-show-download='true' data-show-column-summaries='false' data-show-data-types='true' data-show-page-size-selector='false' data-show-column-explorer='true' data-show-chart-builder='true' data-row-headers='[]' data-has-stable-row-id='false' data-lazy='false' data-preload='false'></marimo-table></marimo-ui-element>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "RGSE",
+      "code_hash": "93e02f51656469ab67426851dd8896e3",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/html": "<marimo-json-output data-json-data='{&quot;properties&quot;:{&quot;bigquery-table-id&quot;:&quot;lakehouse-demo-7000.ridership_lakehouse.bus_stations&quot;},&quot;current-snapshot-id&quot;:-1}' data-value-types='&quot;json&quot;'></marimo-json-output>"
+          }
+        }
+      ],
+      "console": [
+        {
+          "type": "stream",
+          "name": "stderr",
+          "text": "/usr/local/google/home/eyalbenivri/projects/open-data-lakehouse-demo/data-journey/.venv/lib/python3.14/site-packages/google_crc32c/__init__.py:29: RuntimeWarning: As the c extension couldn't be imported, `google-crc32c` is using a pure python implementation that is significantly slower. If possible, please configure a c build environment and compile the extension\n  warnings.warn(_SLOW_CRC32C_WARNING, RuntimeWarning)\n",
+          "mimetype": "text/plain"
+        }
+      ]
+    },
+    {
+      "id": "emfo",
+      "code_hash": "e0de23f3a4c86dc0281b6f7afbd8dc7d",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/html": "<pre class='text-xs'>LoadJob&lt;project=lakehouse-demo-7000, location=us-central1, id=9188c12e-3f6b-4088-a35a-18c9438b1f77&gt;</pre>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "Hstk",
+      "code_hash": "487fbe1e8aa0c6b35086913a9803300f",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/html": "<marimo-ui-element object-id='Hstk-0' random-id='93578307-741d-d771-be99-d60c1050dabb'><marimo-table data-initial-value='[]' data-label='null' data-data='&quot;[{&#92;&quot;Name&#92;&quot;:&#92;&quot;bq_namespace/bus_stations/data/7da200b7-7391-42ee-bde3-a3e3434588cc-8d97e9b4c54414c5-f-00000-of-00001.parquet&#92;&quot;,&#92;&quot;Size&#92;&quot;:24393,&#92;&quot;Content Type&#92;&quot;:&#92;&quot;application/octet-stream&#92;&quot;,&#92;&quot;Updated&#92;&quot;:&#92;&quot;2025-12-05 09:31:08.638000+00:00&#92;&quot;},{&#92;&quot;Name&#92;&quot;:&#92;&quot;bq_namespace/bus_stations/data/eeb89ffe-d821-4679-abcf-ffeae37fe6a1-4a9e5fa17f38be0e-f-00000-of-00001.parquet&#92;&quot;,&#92;&quot;Size&#92;&quot;:1049,&#92;&quot;Content Type&#92;&quot;:&#92;&quot;application/octet-stream&#92;&quot;,&#92;&quot;Updated&#92;&quot;:&#92;&quot;2025-12-05 09:31:05.927000+00:00&#92;&quot;},{&#92;&quot;Name&#92;&quot;:&#92;&quot;bq_namespace/bus_stations/metadata/v0.metadata.json&#92;&quot;,&#92;&quot;Size&#92;&quot;:116,&#92;&quot;Content Type&#92;&quot;:&#92;&quot;application/json&#92;&quot;,&#92;&quot;Updated&#92;&quot;:&#92;&quot;2025-12-05 09:31:03.461000+00:00&#92;&quot;}]&quot;' data-total-rows='3' data-total-columns='4' data-max-columns='50' data-banner-text='&quot;&quot;' data-pagination='true' data-page-size='10' data-field-types='[[&quot;Name&quot;,[&quot;string&quot;,&quot;object&quot;]],[&quot;Size&quot;,[&quot;integer&quot;,&quot;int64&quot;]],[&quot;Content Type&quot;,[&quot;string&quot;,&quot;object&quot;]],[&quot;Updated&quot;,[&quot;datetime&quot;,&quot;datetime64[ns, UTC]&quot;]]]' data-show-filters='true' data-show-download='true' data-show-column-summaries='false' data-show-data-types='true' data-show-page-size-selector='false' data-show-column-explorer='true' data-show-chart-builder='true' data-row-headers='[]' data-has-stable-row-id='false' data-lazy='false' data-preload='false'></marimo-table></marimo-ui-element>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "iLit",
+      "code_hash": "93e02f51656469ab67426851dd8896e3",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/html": "<marimo-json-output data-json-data='{&quot;properties&quot;:{&quot;bigquery-table-id&quot;:&quot;lakehouse-demo-7000.ridership_lakehouse.bus_stations&quot;},&quot;current-snapshot-id&quot;:-1}' data-value-types='&quot;json&quot;'></marimo-json-output>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "ROlb",
+      "code_hash": "79d4a71a6f9d1b9b525b36597464ff09",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/html": "<marimo-ui-element object-id='ROlb-0' random-id='42161cd2-1940-dbb0-0b20-21125c8f2cef'><marimo-table data-initial-value='[]' data-label='null' data-data='&quot;[{&#92;&quot;bus_stop_id&#92;&quot;:432,&#92;&quot;address&#92;&quot;:&#92;&quot;433 Jill Springs, New Roberttown&#92;&quot;,&#92;&quot;school_zone&#92;&quot;:true,&#92;&quot;seating&#92;&quot;:false,&#92;&quot;borough&#92;&quot;:&#92;&quot;Bronx&#92;&quot;,&#92;&quot;latitude&#92;&quot;:40.819584,&#92;&quot;longitude&#92;&quot;:-73.90177},{&#92;&quot;bus_stop_id&#92;&quot;:444,&#92;&quot;address&#92;&quot;:&#92;&quot;863 Lawrence Valleys, Port Lindachester&#92;&quot;,&#92;&quot;school_zone&#92;&quot;:true,&#92;&quot;seating&#92;&quot;:true,&#92;&quot;borough&#92;&quot;:&#92;&quot;Bronx&#92;&quot;,&#92;&quot;latitude&#92;&quot;:40.869526,&#92;&quot;longitude&#92;&quot;:-73.84638},{&#92;&quot;bus_stop_id&#92;&quot;:382,&#92;&quot;address&#92;&quot;:&#92;&quot;USNV Garcia, FPO AA 13177&#92;&quot;,&#92;&quot;school_zone&#92;&quot;:true,&#92;&quot;seating&#92;&quot;:true,&#92;&quot;borough&#92;&quot;:&#92;&quot;Bronx&#92;&quot;,&#92;&quot;latitude&#92;&quot;:40.862804,&#92;&quot;longitude&#92;&quot;:-73.90103},{&#92;&quot;bus_stop_id&#92;&quot;:425,&#92;&quot;address&#92;&quot;:&#92;&quot;781 Miller Hill, Barbaraland&#92;&quot;,&#92;&quot;school_zone&#92;&quot;:true,&#92;&quot;seating&#92;&quot;:false,&#92;&quot;borough&#92;&quot;:&#92;&quot;Bronx&#92;&quot;,&#92;&quot;latitude&#92;&quot;:40.848827,&#92;&quot;longitude&#92;&quot;:-73.868454},{&#92;&quot;bus_stop_id&#92;&quot;:431,&#92;&quot;address&#92;&quot;:&#92;&quot;16475 Mitchell Fords, Jacquelineland&#92;&quot;,&#92;&quot;school_zone&#92;&quot;:true,&#92;&quot;seating&#92;&quot;:false,&#92;&quot;borough&#92;&quot;:&#92;&quot;Bronx&#92;&quot;,&#92;&quot;latitude&#92;&quot;:40.82218,&#92;&quot;longitude&#92;&quot;:-73.896736},{&#92;&quot;bus_stop_id&#92;&quot;:427,&#92;&quot;address&#92;&quot;:&#92;&quot;6483 Cameron Trail, East Lydiamouth&#92;&quot;,&#92;&quot;school_zone&#92;&quot;:true,&#92;&quot;seating&#92;&quot;:true,&#92;&quot;borough&#92;&quot;:&#92;&quot;Bronx&#92;&quot;,&#92;&quot;latitude&#92;&quot;:40.840294,&#92;&quot;longitude&#92;&quot;:-73.88005},{&#92;&quot;bus_stop_id&#92;&quot;:216,&#92;&quot;address&#92;&quot;:&#92;&quot;PSC 9537&#92;&quot;,&#92;&quot;school_zone&#92;&quot;:false,&#92;&quot;seating&#92;&quot;:false,&#92;&quot;borough&#92;&quot;:&#92;&quot;Bronx&#92;&quot;,&#92;&quot;latitude&#92;&quot;:40.8459,&#92;&quot;longitude&#92;&quot;:-73.91013},{&#92;&quot;bus_stop_id&#92;&quot;:370,&#92;&quot;address&#92;&quot;:&#92;&quot;653 William Course Apt. 122, Carlsonfurt&#92;&quot;,&#92;&quot;school_zone&#92;&quot;:false,&#92;&quot;seating&#92;&quot;:false,&#92;&quot;borough&#92;&quot;:&#92;&quot;Bronx&#92;&quot;,&#92;&quot;latitude&#92;&quot;:40.826527,&#92;&quot;longitude&#92;&quot;:-73.886284},{&#92;&quot;bus_stop_id&#92;&quot;:376,&#92;&quot;address&#92;&quot;:&#92;&quot;184 Rodriguez Mews, South Aaron&#92;&quot;,&#92;&quot;school_zone&#92;&quot;:true,&#92;&quot;seating&#92;&quot;:false,&#92;&quot;borough&#92;&quot;:&#92;&quot;Bronx&#92;&quot;,&#92;&quot;latitude&#92;&quot;:40.807568,&#92;&quot;longitude&#92;&quot;:-73.91924},{&#92;&quot;bus_stop_id&#92;&quot;:218,&#92;&quot;address&#92;&quot;:&#92;&quot;489 Eric Track, New Stephanie&#92;&quot;,&#92;&quot;school_zone&#92;&quot;:false,&#92;&quot;seating&#92;&quot;:true,&#92;&quot;borough&#92;&quot;:&#92;&quot;Bronx&#92;&quot;,&#92;&quot;latitude&#92;&quot;:40.83377,&#92;&quot;longitude&#92;&quot;:-73.91844}]&quot;' data-total-rows='10' data-total-columns='7' data-max-columns='50' data-banner-text='&quot;&quot;' data-pagination='true' data-page-size='10' data-field-types='[[&quot;bus_stop_id&quot;,[&quot;integer&quot;,&quot;Int64&quot;]],[&quot;address&quot;,[&quot;string&quot;,&quot;object&quot;]],[&quot;school_zone&quot;,[&quot;unknown&quot;,&quot;boolean&quot;]],[&quot;seating&quot;,[&quot;unknown&quot;,&quot;boolean&quot;]],[&quot;borough&quot;,[&quot;string&quot;,&quot;object&quot;]],[&quot;latitude&quot;,[&quot;number&quot;,&quot;float64&quot;]],[&quot;longitude&quot;,[&quot;number&quot;,&quot;float64&quot;]]]' data-show-filters='true' data-show-download='true' data-show-column-summaries='false' data-show-data-types='true' data-show-page-size-selector='true' data-show-column-explorer='true' data-show-chart-builder='true' data-row-headers='[]' data-has-stable-row-id='false' data-lazy='false' data-preload='false'></marimo-table></marimo-ui-element>"
+          }
+        }
+      ],
+      "console": [
+        {
+          "type": "stream",
+          "name": "stderr",
+          "text": "/usr/local/google/home/eyalbenivri/projects/open-data-lakehouse-demo/data-journey/.venv/lib/python3.14/site-packages/google/cloud/bigquery/table.py:1994: UserWarning: BigQuery Storage module not found, fetch data with the REST endpoint instead.\n  warnings.warn(\n",
+          "mimetype": "text/plain"
+        }
+      ]
+    },
+    {
+      "id": "qnkX",
+      "code_hash": "4a3bc77d08b91604aeb2a16f58c16ce6",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/html": "<pre class='text-xs'>&lt;google.cloud.bigquery.table._EmptyRowIterator object at 0x7fbc32f42c10&gt;</pre>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "TqIu",
+      "code_hash": "6cf4eb7c955735d6c278d7304f402153",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/html": "<marimo-ui-element object-id='TqIu-0' random-id='abf84798-a31a-f20f-cdc7-272fcdfbab42'><marimo-table data-initial-value='[]' data-label='null' data-data='&quot;[{&#92;&quot;Name&#92;&quot;:&#92;&quot;bq_namespace/bus_stations/metadata/d490c7d6-12ac-4bfe-a2d3-103e0c67554b-034bff6f90023930-f-00000-of-00001.avro&#92;&quot;,&#92;&quot;Size&#92;&quot;:2306,&#92;&quot;Content Type&#92;&quot;:&#92;&quot;application/octet-stream&#92;&quot;,&#92;&quot;Updated&#92;&quot;:&#92;&quot;2025-12-05 09:31:11.848000+00:00&#92;&quot;},{&#92;&quot;Name&#92;&quot;:&#92;&quot;bq_namespace/bus_stations/metadata/d490c7d6-12ac-4bfe-a2d3-103e0c67554b-034bff6f90023930-f-manifest-list-00000-of-00001.avro&#92;&quot;,&#92;&quot;Size&#92;&quot;:1027,&#92;&quot;Content Type&#92;&quot;:&#92;&quot;application/octet-stream&#92;&quot;,&#92;&quot;Updated&#92;&quot;:&#92;&quot;2025-12-05 09:31:12.041000+00:00&#92;&quot;},{&#92;&quot;Name&#92;&quot;:&#92;&quot;bq_namespace/bus_stations/metadata/v0.metadata.json&#92;&quot;,&#92;&quot;Size&#92;&quot;:116,&#92;&quot;Content Type&#92;&quot;:&#92;&quot;application/json&#92;&quot;,&#92;&quot;Updated&#92;&quot;:&#92;&quot;2025-12-05 09:31:03.461000+00:00&#92;&quot;},{&#92;&quot;Name&#92;&quot;:&#92;&quot;bq_namespace/bus_stations/metadata/v1764927071.metadata.json&#92;&quot;,&#92;&quot;Size&#92;&quot;:1367,&#92;&quot;Content Type&#92;&quot;:&#92;&quot;application/octet-stream&#92;&quot;,&#92;&quot;Updated&#92;&quot;:&#92;&quot;2025-12-05 09:31:12.382000+00:00&#92;&quot;},{&#92;&quot;Name&#92;&quot;:&#92;&quot;bq_namespace/bus_stations/metadata/version-hint.text&#92;&quot;,&#92;&quot;Size&#92;&quot;:10,&#92;&quot;Content Type&#92;&quot;:&#92;&quot;application/octet-stream&#92;&quot;,&#92;&quot;Updated&#92;&quot;:&#92;&quot;2025-12-05 09:31:12.639000+00:00&#92;&quot;}]&quot;' data-total-rows='5' data-total-columns='4' data-max-columns='50' data-banner-text='&quot;&quot;' data-pagination='true' data-page-size='10' data-field-types='[[&quot;Name&quot;,[&quot;string&quot;,&quot;object&quot;]],[&quot;Size&quot;,[&quot;integer&quot;,&quot;int64&quot;]],[&quot;Content Type&quot;,[&quot;string&quot;,&quot;object&quot;]],[&quot;Updated&quot;,[&quot;datetime&quot;,&quot;datetime64[ns, UTC]&quot;]]]' data-show-filters='true' data-show-download='true' data-show-column-summaries='false' data-show-data-types='true' data-show-page-size-selector='false' data-show-column-explorer='true' data-show-chart-builder='true' data-row-headers='[]' data-has-stable-row-id='false' data-lazy='false' data-preload='false'></marimo-table></marimo-ui-element>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "DnEU",
+      "code_hash": "91507beb39afee7f9f20d5736df401de",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/html": "<div style='display: flex;flex: 1;flex-direction: column;justify-content: flex-start;align-items: normal;flex-wrap: nowrap;gap: 0.5rem'><pre class='text-xs'>Latest Version of metadata: 1764927071</pre><pre class='text-xs'>\n</pre><pre class='text-xs'></pre><pre class='text-xs'>\n</pre><pre class='text-xs'>--------------------</pre><pre class='text-xs'>\n</pre><pre class='text-xs'>Latest metadata from our metadata file (v1764927071.metadata.json):</pre><pre class='text-xs'>\n</pre><marimo-json-output data-json-data='{&quot;current-schema-id&quot;:0,&quot;current-snapshot-id&quot;:8092228724195014290,&quot;default-sort-order-id&quot;:0,&quot;default-spec-id&quot;:0,&quot;format-version&quot;:2,&quot;last-column-id&quot;:7,&quot;last-partition-id&quot;:999,&quot;last-sequence-number&quot;:0,&quot;last-updated-ms&quot;:1764927071068,&quot;location&quot;:&quot;gs://lakehouse-demo-7000-iceberg-bq-catalog/bq_namespace/bus_stations&quot;,&quot;partition-specs&quot;:[{&quot;fields&quot;:[],&quot;spec-id&quot;:0}],&quot;properties&quot;:{},&quot;schemas&quot;:[{&quot;fields&quot;:[{&quot;id&quot;:1,&quot;name&quot;:&quot;bus_stop_id&quot;,&quot;required&quot;:false,&quot;type&quot;:&quot;long&quot;},{&quot;id&quot;:2,&quot;name&quot;:&quot;address&quot;,&quot;required&quot;:false,&quot;type&quot;:&quot;string&quot;},{&quot;id&quot;:3,&quot;name&quot;:&quot;school_zone&quot;,&quot;required&quot;:false,&quot;type&quot;:&quot;boolean&quot;},{&quot;id&quot;:4,&quot;name&quot;:&quot;seating&quot;,&quot;required&quot;:false,&quot;type&quot;:&quot;boolean&quot;},{&quot;id&quot;:5,&quot;name&quot;:&quot;borough&quot;,&quot;required&quot;:false,&quot;type&quot;:&quot;string&quot;},{&quot;id&quot;:6,&quot;name&quot;:&quot;latitude&quot;,&quot;required&quot;:false,&quot;type&quot;:&quot;double&quot;},{&quot;id&quot;:7,&quot;name&quot;:&quot;longitude&quot;,&quot;required&quot;:false,&quot;type&quot;:&quot;double&quot;}],&quot;schema-id&quot;:0,&quot;type&quot;:&quot;struct&quot;}],&quot;snapshot-log&quot;:[{&quot;snapshot-id&quot;:8092228724195014290,&quot;timestamp-ms&quot;:1764927071068}],&quot;snapshots&quot;:[{&quot;manifest-list&quot;:&quot;gs://lakehouse-demo-7000-iceberg-bq-catalog/bq_namespace/bus_stations/metadata/d490c7d6-12ac-4bfe-a2d3-103e0c67554b-034bff6f90023930-f-manifest-list-00000-of-00001.avro&quot;,&quot;schema-id&quot;:0,&quot;sequence-number&quot;:0,&quot;snapshot-id&quot;:8092228724195014290,&quot;summary&quot;:{&quot;operation&quot;:&quot;overwrite&quot;},&quot;timestamp-ms&quot;:1764927071068}],&quot;sort-orders&quot;:[{&quot;fields&quot;:[],&quot;order-id&quot;:0}],&quot;table-uuid&quot;:&quot;eb2e6006-64be-33c3-af31-6d942d8ae1ec&quot;}' data-value-types='&quot;json&quot;'></marimo-json-output></div>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "ulZA",
+      "code_hash": "516bfd879b4e07a9aee49f9d61859415",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/html": "<div style='display: flex;flex: 1;flex-direction: column;justify-content: flex-start;align-items: normal;flex-wrap: nowrap;gap: 0.5rem'><span>Record 1 ()</span><marimo-json-output data-json-data='{&quot;added_files_count&quot;:2,&quot;added_rows_count&quot;:428,&quot;added_snapshot_id&quot;:8092228724195014290,&quot;content&quot;:0,&quot;deleted_files_count&quot;:0,&quot;deleted_rows_count&quot;:0,&quot;existing_files_count&quot;:0,&quot;existing_rows_count&quot;:0,&quot;manifest_length&quot;:2306,&quot;manifest_path&quot;:&quot;gs://lakehouse-demo-7000-iceberg-bq-catalog/bq_namespace/bus_stations/metadata/d490c7d6-12ac-4bfe-a2d3-103e0c67554b-034bff6f90023930-f-00000-of-00001.avro&quot;,&quot;min_sequence_number&quot;:0,&quot;partition_spec_id&quot;:0,&quot;sequence_number&quot;:0}' data-value-types='&quot;json&quot;'></marimo-json-output></div>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "ecfG",
+      "code_hash": "2b8c72b3e7cd9fd4a6339046dd74f26a",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/html": "<div style='display: flex;flex: 1;flex-direction: column;justify-content: flex-start;align-items: normal;flex-wrap: nowrap;gap: 0.5rem'><span>Record 1 (bq_namespace/bus_stations/metadata/d490c7d6-12ac-4bfe-a2d3-103e0c67554b-034bff6f90023930-f-00000-of-00001.avro)</span><marimo-json-output data-json-data='{&quot;status&quot;:1,&quot;data_file&quot;:{&quot;file_path&quot;:&quot;gs://lakehouse-demo-7000-iceberg-bq-catalog/bq_namespace/bus_stations/data/7da200b7-7391-42ee-bde3-a3e3434588cc-8d97e9b4c54414c5-f-00000-of-00001.parquet&quot;,&quot;file_format&quot;:&quot;PARQUET&quot;,&quot;partition&quot;:{},&quot;record_count&quot;:428,&quot;file_size_in_bytes&quot;:24393,&quot;value_counts&quot;:[],&quot;null_value_counts&quot;:[],&quot;lower_bounds&quot;:[],&quot;upper_bounds&quot;:[],&quot;content&quot;:0}}' data-value-types='&quot;json&quot;'></marimo-json-output><span>Record 2 (bq_namespace/bus_stations/metadata/d490c7d6-12ac-4bfe-a2d3-103e0c67554b-034bff6f90023930-f-00000-of-00001.avro)</span><marimo-json-output data-json-data='{&quot;status&quot;:1,&quot;data_file&quot;:{&quot;file_path&quot;:&quot;gs://lakehouse-demo-7000-iceberg-bq-catalog/bq_namespace/bus_stations/data/eeb89ffe-d821-4679-abcf-ffeae37fe6a1-4a9e5fa17f38be0e-f-00000-of-00001.parquet&quot;,&quot;file_format&quot;:&quot;PARQUET&quot;,&quot;partition&quot;:{},&quot;record_count&quot;:0,&quot;file_size_in_bytes&quot;:1049,&quot;value_counts&quot;:[],&quot;null_value_counts&quot;:[],&quot;lower_bounds&quot;:[],&quot;upper_bounds&quot;:[],&quot;content&quot;:0}}' data-value-types='&quot;json&quot;'></marimo-json-output></div>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "aLJB",
+      "code_hash": "ab09cbdf785e0d7355a17d40458b4fd7",
+      "outputs": [
+        {
+          "type": "error",
+          "ename": "exception",
+          "evalue": "'Credentials' object has no attribute 'service_account_email'",
+          "traceback": []
+        }
+      ],
+      "console": [
+        {
+          "type": "stream",
+          "name": "stdout",
+          "text": "<class 'google.oauth2.credentials.Credentials'>\n['__abstractmethods__', '__class__', '__delattr__', '__dict__', '__dir__', '__doc__', '__eq__', '__firstlineno__', '__format__', '__ge__', '__getattribute__', '__getstate__', '__gt__', '__hash__', '__init__', '__init_subclass__', '__le__', '__lt__', '__module__', '__ne__', '__new__', '__reduce__', '__reduce_ex__', '__repr__', '__setattr__', '__setstate__', '__sizeof__', '__static_attributes__', '__str__', '__subclasshook__', '__weakref__', '_abc_impl', '_account', '_apply', '_blocking_refresh', '_client_id', '_client_secret', '_cred_file_path', '_default_scopes', '_enable_reauth_refresh', '_granted_scopes', '_id_token', '_make_copy', '_metric_header_for_usage', '_non_blocking_refresh', '_quota_project_id', '_rapt_token', '_refresh_handler', '_refresh_token', '_refresh_worker', '_scopes', '_token_uri', '_trust_boundary', '_universe_domain', '_use_non_blocking_refresh', 'account', 'apply', 'before_request', 'client_id', 'client_secret', 'default_scopes', 'expired', 'expiry', 'from_authorized_user_file', 'from_authorized_user_info', 'get_cred_info', 'granted_scopes', 'has_scopes', 'id_token', 'quota_project_id', 'rapt_token', 'refresh', 'refresh_handler', 'refresh_token', 'requires_scopes', 'scopes', 'to_json', 'token', 'token_state', 'token_uri', 'universe_domain', 'valid', 'with_account', 'with_non_blocking_refresh', 'with_quota_project', 'with_quota_project_from_environment', 'with_token_uri', 'with_universe_domain']\n",
+          "mimetype": "text/plain"
+        },
+        {
+          "type": "stream",
+          "name": "stderr",
+          "text": "<span class=\"codehilite\"><div class=\"highlight\"><pre><span></span><span class=\"gt\">Traceback (most recent call last):</span>\n  File <span class=\"nb\">&quot;/tmp/marimo_1222474/__marimo__cell_aLJB_.py&quot;</span>, line <span class=\"m\">10</span>, in <span class=\"n\">&lt;module&gt;</span>\n<span class=\"w\">    </span><span class=\"nb\">print</span><span class=\"p\">(</span><span class=\"n\">credentials</span><span class=\"o\">.</span><span class=\"n\">service_account_email</span><span class=\"p\">)</span>\n<span class=\"w\">          </span><span class=\"pm\">^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^</span>\n<span class=\"gr\">AttributeError</span>: <span class=\"n\">&#39;Credentials&#39; object has no attribute &#39;service_account_email&#39;</span>\n</pre></div>\n</span>",
+          "mimetype": "application/vnd.marimo+traceback"
+        }
+      ]
+    },
+    {
+      "id": "xXTn",
+      "code_hash": "9a4b647ca171895edd83f7d80fcecff5",
+      "outputs": [
+        {
+          "type": "error",
+          "ename": "exception",
+          "evalue": "Error while creating Dataproc Session",
+          "traceback": []
+        }
+      ],
+      "console": [
+        {
+          "type": "stream",
+          "name": "stderr",
+          "text": "<span class=\"codehilite\"><div class=\"highlight\"><pre><span></span><span class=\"gt\">Traceback (most recent call last):</span>\n  File <span class=\"nb\">&quot;/usr/local/google/home/eyalbenivri/projects/open-data-lakehouse-demo/data-journey/.venv/lib/python3.14/site-packages/google/api_core/grpc_helpers.py&quot;</span>, line <span class=\"m\">75</span>, in <span class=\"n\">error_remapped_callable</span>\n<span class=\"w\">    </span><span class=\"k\">return</span> <span class=\"n\">callable_</span><span class=\"p\">(</span><span class=\"o\">*</span><span class=\"n\">args</span><span class=\"p\">,</span> <span class=\"o\">**</span><span class=\"n\">kwargs</span><span class=\"p\">)</span>\n  File <span class=\"nb\">&quot;/usr/local/google/home/eyalbenivri/projects/open-data-lakehouse-demo/data-journey/.venv/lib/python3.14/site-packages/grpc/_interceptor.py&quot;</span>, line <span class=\"m\">276</span>, in <span class=\"n\">__call__</span>\n<span class=\"w\">    </span><span class=\"n\">response</span><span class=\"p\">,</span> <span class=\"n\">ignored_call</span> <span class=\"o\">=</span> <span class=\"bp\">self</span><span class=\"o\">.</span><span class=\"n\">_with_call</span><span class=\"p\">(</span>\n<span class=\"w\">                             </span><span class=\"pm\">~~~~~~~~~~~~~~~^</span>\n<span class=\"w\">    </span>    <span class=\"n\">request</span><span class=\"p\">,</span>\n<span class=\"w\">        </span><span class=\"pm\">^^^^^^^^</span>\n<span class=\"w\">    </span><span class=\"o\">...&lt;</span><span class=\"mi\">4</span> <span class=\"n\">lines</span><span class=\"o\">&gt;...</span>\n<span class=\"w\">    </span>    <span class=\"n\">compression</span><span class=\"o\">=</span><span class=\"n\">compression</span><span class=\"p\">,</span>\n<span class=\"w\">        </span><span class=\"pm\">^^^^^^^^^^^^^^^^^^^^^^^^</span>\n<span class=\"w\">    </span><span class=\"p\">)</span>\n<span class=\"w\">    </span><span class=\"pm\">^</span>\n  File <span class=\"nb\">&quot;/usr/local/google/home/eyalbenivri/projects/open-data-lakehouse-demo/data-journey/.venv/lib/python3.14/site-packages/grpc/_interceptor.py&quot;</span>, line <span class=\"m\">331</span>, in <span class=\"n\">_with_call</span>\n<span class=\"w\">    </span><span class=\"k\">return</span> <span class=\"n\">call</span><span class=\"o\">.</span><span class=\"n\">result</span><span class=\"p\">(),</span> <span class=\"n\">call</span>\n<span class=\"w\">           </span><span class=\"pm\">~~~~~~~~~~~^^</span>\n  File <span class=\"nb\">&quot;/usr/local/google/home/eyalbenivri/projects/open-data-lakehouse-demo/data-journey/.venv/lib/python3.14/site-packages/grpc/_channel.py&quot;</span>, line <span class=\"m\">438</span>, in <span class=\"n\">result</span>\n<span class=\"w\">    </span><span class=\"k\">raise</span> <span class=\"bp\">self</span>\n  File <span class=\"nb\">&quot;/usr/local/google/home/eyalbenivri/projects/open-data-lakehouse-demo/data-journey/.venv/lib/python3.14/site-packages/grpc/_interceptor.py&quot;</span>, line <span class=\"m\">314</span>, in <span class=\"n\">continuation</span>\n<span class=\"w\">    </span><span class=\"n\">response</span><span class=\"p\">,</span> <span class=\"n\">call</span> <span class=\"o\">=</span> <span class=\"bp\">self</span><span class=\"o\">.</span><span class=\"n\">_thunk</span><span class=\"p\">(</span><span class=\"n\">new_method</span><span class=\"p\">)</span><span class=\"o\">.</span><span class=\"n\">with_call</span><span class=\"p\">(</span>\n<span class=\"w\">                     </span><span class=\"pm\">~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^</span>\n<span class=\"w\">    </span>    <span class=\"n\">request</span><span class=\"p\">,</span>\n<span class=\"w\">        </span><span class=\"pm\">^^^^^^^^</span>\n<span class=\"w\">    </span><span class=\"o\">...&lt;</span><span class=\"mi\">4</span> <span class=\"n\">lines</span><span class=\"o\">&gt;...</span>\n<span class=\"w\">    </span>    <span class=\"n\">compression</span><span class=\"o\">=</span><span class=\"n\">new_compression</span><span class=\"p\">,</span>\n<span class=\"w\">        </span><span class=\"pm\">^^^^^^^^^^^^^^^^^^^^^^^^^^^^</span>\n<span class=\"w\">    </span><span class=\"p\">)</span>\n<span class=\"w\">    </span><span class=\"pm\">^</span>\n  File <span class=\"nb\">&quot;/usr/local/google/home/eyalbenivri/projects/open-data-lakehouse-demo/data-journey/.venv/lib/python3.14/site-packages/grpc/_channel.py&quot;</span>, line <span class=\"m\">1180</span>, in <span class=\"n\">with_call</span>\n<span class=\"w\">    </span><span class=\"k\">return</span> <span class=\"n\">_end_unary_response_blocking</span><span class=\"p\">(</span><span class=\"n\">state</span><span class=\"p\">,</span> <span class=\"n\">call</span><span class=\"p\">,</span> <span class=\"kc\">True</span><span class=\"p\">,</span> <span class=\"kc\">None</span><span class=\"p\">)</span>\n  File <span class=\"nb\">&quot;/usr/local/google/home/eyalbenivri/projects/open-data-lakehouse-demo/data-journey/.venv/lib/python3.14/site-packages/grpc/_channel.py&quot;</span>, line <span class=\"m\">996</span>, in <span class=\"n\">_end_unary_response_blocking</span>\n<span class=\"w\">    </span><span class=\"k\">raise</span> <span class=\"n\">_InactiveRpcError</span><span class=\"p\">(</span><span class=\"n\">state</span><span class=\"p\">)</span>  <span class=\"c1\"># pytype: disable=not-instantiable</span>\n<span class=\"w\">    </span><span class=\"pm\">^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^</span>\n<span class=\"gr\">grpc._channel._InactiveRpcError</span>: <span class=\"n\">&lt;_InactiveRpcError of RPC that terminated with:</span>\n<span class=\"x\">\tstatus = StatusCode.UNIMPLEMENTED</span>\n<span class=\"x\">\tdetails = &quot;Received http2 header with status: 404&quot;</span>\n<span class=\"x\">\tdebug_error_string = &quot;UNKNOWN:Error received from peer  {grpc_status:12, grpc_message:&quot;Received http2 header with status: 404&quot;}&quot;</span>\n<span class=\"x\">&gt;</span>\n\n<span class=\"gt\">The above exception was the direct cause of the following exception:</span>\n\n<span class=\"gt\">Traceback (most recent call last):</span>\n  File <span class=\"nb\">&quot;/usr/local/google/home/eyalbenivri/projects/open-data-lakehouse-demo/data-journey/.venv/lib/python3.14/site-packages/google/cloud/dataproc_spark_connect/session.py&quot;</span>, line <span class=\"m\">350</span>, in <span class=\"n\">__create</span>\n<span class=\"w\">    </span><span class=\"p\">)</span><span class=\"o\">.</span><span class=\"n\">create_session</span><span class=\"p\">(</span><span class=\"n\">session_request</span><span class=\"p\">)</span>\n<span class=\"w\">      </span><span class=\"pm\">~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^</span>\n  File <span class=\"nb\">&quot;/usr/local/google/home/eyalbenivri/projects/open-data-lakehouse-demo/data-journey/.venv/lib/python3.14/site-packages/google/cloud/dataproc_v1/services/session_controller/client.py&quot;</span>, line <span class=\"m\">903</span>, in <span class=\"n\">create_session</span>\n<span class=\"w\">    </span><span class=\"n\">response</span> <span class=\"o\">=</span> <span class=\"n\">rpc</span><span class=\"p\">(</span>\n<span class=\"w\">    </span>    <span class=\"n\">request</span><span class=\"p\">,</span>\n<span class=\"w\">    </span><span class=\"o\">...&lt;</span><span class=\"mi\">2</span> <span class=\"n\">lines</span><span class=\"o\">&gt;...</span>\n<span class=\"w\">    </span>    <span class=\"n\">metadata</span><span class=\"o\">=</span><span class=\"n\">metadata</span><span class=\"p\">,</span>\n<span class=\"w\">    </span><span class=\"p\">)</span>\n  File <span class=\"nb\">&quot;/usr/local/google/home/eyalbenivri/projects/open-data-lakehouse-demo/data-journey/.venv/lib/python3.14/site-packages/google/api_core/gapic_v1/method.py&quot;</span>, line <span class=\"m\">131</span>, in <span class=\"n\">__call__</span>\n<span class=\"w\">    </span><span class=\"k\">return</span> <span class=\"n\">wrapped_func</span><span class=\"p\">(</span><span class=\"o\">*</span><span class=\"n\">args</span><span class=\"p\">,</span> <span class=\"o\">**</span><span class=\"n\">kwargs</span><span class=\"p\">)</span>\n  File <span class=\"nb\">&quot;/usr/local/google/home/eyalbenivri/projects/open-data-lakehouse-demo/data-journey/.venv/lib/python3.14/site-packages/google/api_core/grpc_helpers.py&quot;</span>, line <span class=\"m\">77</span>, in <span class=\"n\">error_remapped_callable</span>\n<span class=\"w\">    </span><span class=\"k\">raise</span> <span class=\"n\">exceptions</span><span class=\"o\">.</span><span class=\"n\">from_grpc_error</span><span class=\"p\">(</span><span class=\"n\">exc</span><span class=\"p\">)</span> <span class=\"kn\">from</span><span class=\"w\"> </span><span class=\"nn\">exc</span>\n<span class=\"gr\">google.api_core.exceptions.MethodNotImplemented</span>: <span class=\"n\">501 Received http2 header with status: 404</span>\n\n<span class=\"gt\">The above exception was the direct cause of the following exception:</span>\n\n<span class=\"gt\">Traceback (most recent call last):</span>\n  File <span class=\"nb\">&quot;/usr/local/google/home/eyalbenivri/projects/open-data-lakehouse-demo/data-journey/.venv/lib/python3.14/site-packages/marimo/_runtime/executor.py&quot;</span>, line <span class=\"m\">138</span>, in <span class=\"n\">execute_cell</span>\n<span class=\"w\">    </span><span class=\"n\">exec</span><span class=\"p\">(</span><span class=\"n\">cell</span><span class=\"o\">.</span><span class=\"n\">body</span><span class=\"p\">,</span> <span class=\"n\">glbls</span><span class=\"p\">)</span>\n<span class=\"w\">    </span><span class=\"pm\">~~~~^^^^^^^^^^^^^^^^^^</span>\n  File <span class=\"nb\">&quot;/tmp/marimo_1222474/__marimo__cell_xXTn_.py&quot;</span>, line <span class=\"m\">40</span>, in <span class=\"n\">&lt;module&gt;</span>\n<span class=\"w\">    </span><span class=\"o\">.</span><span class=\"n\">getOrCreate</span><span class=\"p\">()</span>\n<span class=\"w\">     </span><span class=\"pm\">~~~~~~~~~~~^^</span>\n  File <span class=\"nb\">&quot;/usr/local/google/home/eyalbenivri/projects/open-data-lakehouse-demo/data-journey/.venv/lib/python3.14/site-packages/google/cloud/dataproc_spark_connect/session.py&quot;</span>, line <span class=\"m\">489</span>, in <span class=\"n\">getOrCreate</span>\n<span class=\"w\">    </span><span class=\"n\">session</span> <span class=\"o\">=</span> <span class=\"bp\">self</span><span class=\"o\">.</span><span class=\"n\">__create</span><span class=\"p\">()</span>\n  File <span class=\"nb\">&quot;/usr/local/google/home/eyalbenivri/projects/open-data-lakehouse-demo/data-journey/.venv/lib/python3.14/site-packages/google/cloud/dataproc_spark_connect/session.py&quot;</span>, line <span class=\"m\">397</span>, in <span class=\"n\">__create</span>\n<span class=\"w\">    </span><span class=\"k\">raise</span> <span class=\"ne\">RuntimeError</span><span class=\"p\">(</span>\n<span class=\"w\">    </span>    <span class=\"sa\">f</span><span class=\"s2\">&quot;Error while creating Dataproc Session&quot;</span>\n<span class=\"w\">    </span><span class=\"p\">)</span> <span class=\"kn\">from</span><span class=\"w\"> </span><span class=\"nn\">e</span>\n<span class=\"gr\">RuntimeError</span>: <span class=\"n\">Error while creating Dataproc Session</span>\n</pre></div>\n</span>",
+          "mimetype": "application/vnd.marimo+traceback"
+        }
+      ]
+    },
+    {
+      "id": "AjVT",
+      "code_hash": "2f204891a3dc7109239e9c59bcc8d9d6",
+      "outputs": [],
+      "console": []
+    },
+    {
+      "id": "pHFh",
+      "code_hash": "1b39dbf71aac720d1aaeb42ac152acb1",
+      "outputs": [],
+      "console": []
+    },
+    {
+      "id": "aqbW",
+      "code_hash": "cb0b6a448ebebb5bcbed6a604427c314",
+      "outputs": [],
+      "console": []
+    },
+    {
+      "id": "TRpd",
+      "code_hash": "faa5ea10c6d4fd8dfab12689201d680b",
+      "outputs": [],
+      "console": []
+    },
+    {
+      "id": "TXez",
+      "code_hash": "069cae76a876bb40b387113bb426f84f",
+      "outputs": [],
+      "console": []
+    },
+    {
+      "id": "yCnT",
+      "code_hash": "1b3e0682242afb299b3971e31cfd5bba",
+      "outputs": [],
+      "console": []
+    },
+    {
+      "id": "wlCL",
+      "code_hash": "6f98bc7cc9247b7ceee3d7f9a7a2507d",
+      "outputs": [],
+      "console": []
+    },
+    {
+      "id": "kqZH",
+      "code_hash": "2fc89a87a5681508d6807583e152b371",
+      "outputs": [],
+      "console": []
+    },
+    {
+      "id": "wAgl",
+      "code_hash": "23444b046d5997ffa9407919742257ca",
+      "outputs": [],
+      "console": []
+    },
+    {
+      "id": "rEll",
+      "code_hash": "846ab60a6cb069a5a51bd886c64d83b4",
+      "outputs": [],
+      "console": []
+    }
+  ]
+}

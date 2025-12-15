@@ -1,0 +1,294 @@
+{
+  "version": "1",
+  "metadata": {
+    "marimo_version": "0.18.1"
+  },
+  "cells": [
+    {
+      "id": "MJUe",
+      "code_hash": "71ea42b4a1f292348ecd776619b5af3c",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/markdown": "<span class=\"markdown prose dark:prose-invert contents\"><h1 id=\"ridership-open-lakehouse-demo-part-2-simulate-bus-rides-using-apache-spark\">Ridership Open Lakehouse Demo (Part 2): Simulate Bus Rides using Apache Spark</h1>\n<span class=\"paragraph\">This notebook will demonstrate a strategy to implement an open lakehouse on GCP, using Apache Iceberg,\nas an open source standard for managing data, while still leveraging GCP native capabilities. This demo will use\nBigQuery Managed Iceberg Tables, Managed Apache Kafka and Apache Kafka Connect to ingest streaming data, Vertex AI for Generative AI queries on top of the data and Dataplex to govern tables.</span>\n<span class=\"paragraph\">This notebook will process the data to simulate bus rides. The original datasets describes <code>ridership</code> as passengers in bus stations. We created bus lines, but not the rides. This will be the goal of this notebook. We accomplish this using <strong>Google's Cloud Serverless Apache Spark</strong>.</span>\n<span class=\"paragraph\">The processing will simulate <code>bus ridership</code> data, based on <code>bus station ridership</code> data. The <code>bus station ridership</code> shows passengers waiting at a given station at a given timestamp. Our PySpark processing pipelines will use Pandas UDFs, simulating a bus picking up those passengers while driving its route. The routes for the buses are taken from the pre-made <code>bus_lines</code> table.</span>\n<span class=\"paragraph\">All data in this notebook was prepared in the previous <code>part0</code> notebook, and loaded in <code>part1</code> notebook.</span>\n<span class=\"paragraph\"><strong>Note about Iceberg catalogs, and how spark can use them:</strong></span>\n<span class=\"paragraph\">In part 1, we loaded tables to bigquery in Iceberg format. To do so, we used 2 different kind of tables: 1) Managed Iceberg tables for BigQuery &amp; 2) External Iceberg Tables for BigQuery.</span>\n<span class=\"paragraph\">The main difference between them is that the managed tables are read-write for BigQuery, and read-only for spark (and other external engines) while the reverse is true for external tables.</span>\n<span class=\"paragraph\">How to choose? If your main workloads are in BigQuery, and your datasets are created by BigQuery, use the managed tables, as BigQuery retains control on how tables are created, managed clustered etc. If your main workloads are in external engines, and are being written down to GCS by external tools like spark, use the external tables to mount the iceberg tables in BigQuery to make them readable by BigQuery to enable computation on that data.</span>\n<span class=\"paragraph\">In order to read both types of tables, spark needs to access the metadata and the data itself - and it can do so in 2 ways:</span>\n<span class=\"paragraph\">1) access the data through BigQuery: This method is no different from reading BigQuery native tables, using the <a href=\"https://github.com/GoogleCloudDataproc/spark-bigquery-connector\" rel=\"noopener\" target=\"_blank\">Spark-BigQuery-Connector</a>, which is already preloaded in GCP environments (Like Colab Enterprise). This means that spark will access both metadata and data, simply by accessing the BigQuery API, and use BigQuery compute slots in order to retrieve this data. <strong>Pros:</strong> access any data, regardless of storage, in the same way. <strong>Cons:</strong> uses BigQuery slots, hence effects costs differently.</span>\n<span class=\"paragraph\">2) access the data through metadata on GCS: This method is the standard way to read Iceberg data, regardless of where it is stored - this means that we need to configure a catalog for spark, and tell it where the tables are stored in the iceberg format. Spark, using the <code>iceberg</code> libraries, will scan the catalogs for tables data and metadata. If the catalog was written by Spark, and is just accessible to BigQuery by external tables, we should be able to access the data the same way we have written it before, using the same catalog. If the data is managed by BigQuery, we just need to make sure to expose the up-to-date metadata to spark, which means <strong>exporting the metadata</strong> to GCS, before starting the spark process. <strong>Pros:</strong> Not using BigQuery slots, keeps your processing pipelines consistent and costs to a minimum for data access. <strong>Cons:</strong> just more configuration.</span>\n<span class=\"paragraph\">In this notebook, we will access data in all different ways. We will configure the <strong>external</strong> catalog that was used in notebook 1 to write the <code>bus_lines</code> external table. We will configure the <strong>BigQuery catalog</strong> to read the <code>ridership</code> managed table. And we will read the <code>bus_stations</code> table directly through BigQuery, using BigQuery slots to do so.</span>\n<span class=\"paragraph\">Ultimately, in a real-world scenario, you will probably have some BigQuery centric pipelines, writing down data in Managed Iceberg tables, backed in one GCS bucket, and some Spark centric pipelines, writing down data in external tables, backed by another GCS bucket. And maybe some BigQuery data, that is NOT accessible by Iceberg (like native tables, views etc.). This notebook will demonstrate the ability to access all types of data in spark, while the next notebook will demonstrate accessing all types of data in BigQuery - <strong>A truly unified Data Lakehouse</strong>.</span></span>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "vblA",
+      "code_hash": "e5f195f9bb8d7fbf746c7ae4ccfd5a0c",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/markdown": "<span class=\"markdown prose dark:prose-invert contents\"><h2 id=\"setup-environment\">Setup environment</h2></span>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "BYtC",
+      "code_hash": "1ad41f1219acca30e0fa18cee2ac4e2f",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/markdown": "<span class=\"markdown prose dark:prose-invert contents\"><h2 id=\"lets-take-a-look-around\">Let's take a look around</h2>\n<span class=\"paragraph\">We've created a spark session, with a couple of interesting connections. We're running a spark session with the spark-bigquery-connector, which gives us access to all BigQuery tables and Views, and also configured Iceberg catalogs (the one managed by BigLake, and the REST for managing external tables)</span>\n<span class=\"paragraph\">Let's take a quick look at the <strong>catalogs</strong> - each containig <strong>namespses</strong> (also known as databases) and each namespace has <strong>tables</strong>. And compare the access patterns,</span></span>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "Hstk",
+      "code_hash": "9d482663f325c4125c6c2c5f1ddfe625",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/markdown": "<span class=\"markdown prose dark:prose-invert contents\"><span class=\"paragraph\">Can you see the difference?</span>\n<span class=\"paragraph\">There are a few differences between the 2 tables, and the way our spark reads the data. Although reading the data would produce the same logical dataset, it matters how get that data.</span>\n<span class=\"paragraph\">Note that the spark-bigquery-connector version (using <code>spark_catalog</code>) says in the <code>Table Properties</code> section, that the storage layer is set to <code>bigquery</code>. This implies that in order to access the data with this table, we will go though BigQuery to get the data.</span>\n<span class=\"paragraph\">Note in the second description, the <code>Table Properties</code> doesn't say that, rather says that the format is <code>iceberg/parquet</code>, and we do get the exact GCS location of the data as well. This implies that to access the data, we just let the spark-iceberg library access the data directly from GCS.</span>\n<span class=\"paragraph\">The way we choose to read our data has a big impact on the pricing of access to the data, since accessing it through BQ will impact BQ slots usage.</span>\n<span class=\"paragraph\">With that in mind, let's read all the datasets required, each with a different method.</span></span>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "nWHF",
+      "code_hash": "889f55dd017ec168658592cf6e5f099b",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/markdown": "<span class=\"markdown prose dark:prose-invert contents\"><h2 id=\"load-data-from-bigquery\">Load data from BigQuery</h2>\n<span class=\"paragraph\">For the BigQuery managed Iceberg tables, we can use 2 methods to read the data. One is the BigQuery standard way, which defers the reading of data to the BigQuery engine. This means that BigQuery slots are being used to read the data.</span>\n<span class=\"paragraph\">We can also use the standard Iceberg libraries to read the data directly from GCS, and only use the BigQuery metastore to read the metadata of the iceberg files. <strong>This will not use any BigQuery slots to read the data.</strong> To do that, we need to export the metadata of the tables to an iceberg manifest files.</span>\n<span class=\"paragraph\">In the next paragraphs we will demonstrate both methods.</span></span>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "qnkX",
+      "code_hash": "09b304d9e9c2b5dcb9de0624d4e33dff",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/markdown": "<span class=\"markdown prose dark:prose-invert contents\"><h2 id=\"prepare-bus-data-to-be-joined-with-stations-ridership\">Prepare bus data to be joined with stations ridership</h2>\n<span class=\"paragraph\">Our initial <code>ridership</code> table refers to passengers waiting at bus stations, along with minute-by-minute timestamps.</span>\n<span class=\"paragraph\">In order to generate bus trips, picking up passengers along the way, we need to understand what are the available time ranges that we can simulate bus riders, then start simulating trips, from station to station.</span></span>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "ulZA",
+      "code_hash": "b4f28d3bccf5853c30956c3eb364efb6",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/markdown": "<span class=\"markdown prose dark:prose-invert contents\"><h2 id=\"simulate-bus-trips-without-passengers-for-now\">Simulate bus trips - without passengers (for now)</h2></span>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "Pvdt",
+      "code_hash": "2de74fa0e4308dda341338dc6b2561c5",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/markdown": "<span class=\"markdown prose dark:prose-invert contents\"><h2 id=\"join-with-ridership-data\">Join with ridership data</h2>\n<span class=\"paragraph\">This is a short section, to join the <code>ridership</code> df, allowing us to see how many passengers are in each station of a trip, by bus_stop and timestamp</span></span>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "nHfw",
+      "code_hash": "fb207e8dfbdad77362a5bc49cbb9cb3e",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/markdown": "<span class=\"markdown prose dark:prose-invert contents\"><h2 id=\"aggregate-passengers\">Aggregate passengers</h2>\n<span class=\"paragraph\">This section will aggregate for each ride, passengers from each station, taking into consideration the passengers \"alighting\" or  leaving the bus, and the overall bus capacity.</span>\n<span class=\"paragraph\">This means we will take the <code>bus_rides_with_ridership</code> df, and extend it to contain more data, specifically about:</span>\n<ul>\n<li><code>passengers_alighting</code>: passengers departing at each stop</li>\n<li><code>passengers_boarding</code>: passengers onboarding at each stop (we can't necessarily fit all the people in a stop to our bus)</li>\n<li><code>remaining_capacity</code>: after passengers have boarded and alighted, how much room do we still have on the bus</li>\n<li><code>remaining_at_stop</code>: number of passengers who have no more room left and have to wait at the stop for the next bus</li>\n<li><code>total_passengers</code>: number of passengers on the bus, after boarding and alighting.</li>\n</ul></span>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "AjVT",
+      "code_hash": "2517c23a8a2e31f8a7af3cb213415e40",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/markdown": "<span class=\"markdown prose dark:prose-invert contents\"><h2 id=\"store-results-to-bigquery\">Store results to bigquery</h2></span>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "Hbol",
+      "code_hash": "12c13ec6fbf3a71ce5628e7a978d79bb",
+      "outputs": [],
+      "console": []
+    },
+    {
+      "id": "bkHC",
+      "code_hash": "b59ea99c1c1aab49c40bc9b3f53976c1",
+      "outputs": [],
+      "console": []
+    },
+    {
+      "id": "lEQa",
+      "code_hash": "25ab429b2a79046637414258e3f0c651",
+      "outputs": [],
+      "console": []
+    },
+    {
+      "id": "PKri",
+      "code_hash": "f4f177dfcc6d77bc99285fabe6d2572f",
+      "outputs": [],
+      "console": []
+    },
+    {
+      "id": "Xref",
+      "code_hash": "a78e8ffb110cdebb337f38deb37bff82",
+      "outputs": [],
+      "console": []
+    },
+    {
+      "id": "SFPL",
+      "code_hash": "2e0e9154671497775b8b9f51e7261d01",
+      "outputs": [],
+      "console": []
+    },
+    {
+      "id": "RGSE",
+      "code_hash": "257004b755437f8ec24b0dbd249dca16",
+      "outputs": [],
+      "console": []
+    },
+    {
+      "id": "Kclp",
+      "code_hash": "86a93d25fbf5ae7bcd5ffa11852fdb04",
+      "outputs": [],
+      "console": []
+    },
+    {
+      "id": "emfo",
+      "code_hash": "580cf5ca8cc5b18792cd892cd1337f15",
+      "outputs": [],
+      "console": []
+    },
+    {
+      "id": "iLit",
+      "code_hash": "a79bb804bc6703e2e1377dc36ca8b334",
+      "outputs": [],
+      "console": []
+    },
+    {
+      "id": "ZHCJ",
+      "code_hash": "2850e0db08b1c13c98fcab7324856bfe",
+      "outputs": [],
+      "console": []
+    },
+    {
+      "id": "ROlb",
+      "code_hash": "84ca13f6b8e6e6ae93315370d6ed4fd0",
+      "outputs": [],
+      "console": []
+    },
+    {
+      "id": "TqIu",
+      "code_hash": "a2d973bae988f7d676c88a29f57704eb",
+      "outputs": [],
+      "console": []
+    },
+    {
+      "id": "Vxnm",
+      "code_hash": "31d1200e79050c69166d52d246f64a83",
+      "outputs": [],
+      "console": []
+    },
+    {
+      "id": "DnEU",
+      "code_hash": "99aea7b13e4d422cd218a821fde1e5cb",
+      "outputs": [],
+      "console": []
+    },
+    {
+      "id": "ecfG",
+      "code_hash": "14a3c61eda002942d6c337088bcb387e",
+      "outputs": [],
+      "console": []
+    },
+    {
+      "id": "ZBYS",
+      "code_hash": "409c5a921d20ab8d231337b5d12ee961",
+      "outputs": [],
+      "console": []
+    },
+    {
+      "id": "aLJB",
+      "code_hash": "40518e4e154b8c0fc9f1dda4de177d23",
+      "outputs": [],
+      "console": []
+    },
+    {
+      "id": "xXTn",
+      "code_hash": "6488f6232e488aab771c1abbdc6c285e",
+      "outputs": [],
+      "console": []
+    },
+    {
+      "id": "pHFh",
+      "code_hash": "d34b583303dd950c6e70dfdeb6aec2d7",
+      "outputs": [],
+      "console": []
+    },
+    {
+      "id": "NCOB",
+      "code_hash": "793cb5cad5e998f46b46fd0e4c81e113",
+      "outputs": [],
+      "console": []
+    },
+    {
+      "id": "aqbW",
+      "code_hash": "1c06252e45a490d80be5986e07e84412",
+      "outputs": [],
+      "console": []
+    },
+    {
+      "id": "TRpd",
+      "code_hash": "612839cd9fb1a1382ea103c11c062f41",
+      "outputs": [],
+      "console": []
+    },
+    {
+      "id": "TXez",
+      "code_hash": "1c06252e45a490d80be5986e07e84412",
+      "outputs": [],
+      "console": []
+    },
+    {
+      "id": "dNNg",
+      "code_hash": "76fac94a92e1597822d9c4df9a8bcac7",
+      "outputs": [],
+      "console": []
+    },
+    {
+      "id": "yCnT",
+      "code_hash": "1d0db38904205bec4d6f6f6a1f6cec3e",
+      "outputs": [],
+      "console": []
+    }
+  ]
+}

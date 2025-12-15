@@ -12,19 +12,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-variable "project_id" {
-  type        = string
-  description = "GCP Project ID"
-}
+# This resource runs the script to copy data from our open access bucket to the main bucket
+resource "null_resource" "run_copy_script" {
+  provisioner "local-exec" {
+    command = "${path.module}/scripts/copy-data.sh"
 
-variable "region" {
-  type        = string
-  description = "GCP Region"
-  default     = "us-central1"
-}
-
-variable "zone" {
-  type        = string
-  description = "GCP Zone"
-  default     = "us-central1-c"
+    environment = {
+      BUCKET_NAME = var.gcs_main_bucket
+    }
+  }
+  triggers = {
+    always_run = timestamp()
+  }
 }

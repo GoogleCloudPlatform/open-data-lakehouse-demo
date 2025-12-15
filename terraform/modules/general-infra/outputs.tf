@@ -1,0 +1,47 @@
+# Copyright 2024 Google LLC
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     https://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or .
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+
+output "network_id" {
+  value = google_compute_network.open-lakehouse-network.id
+}
+
+output "subnetwork_id" {
+  value = google_compute_subnetwork.open-lakehouse-subnetwork.id
+}
+
+output "gcs_main_bucket" {
+  value = google_storage_bucket.data_lakehouse_bucket.name
+}
+
+output "spark_bucket" {
+  value = google_storage_bucket.spark_bucket.name
+}
+
+output "artifact_repo" {
+  value = google_artifact_registry_repository.docker_repo.repository_id
+}
+
+output "cloud_build_sa_email" {
+  value = google_service_account.cloud_build_account.email
+}
+
+output "rest_catalog_bucket_name" {
+  value = google_storage_bucket.iceberg_rest_catalog.name
+}
+
+output "bq_catalog_bucket_name" {
+  value = google_storage_bucket.iceberg_bq_catalog.name
+}
+

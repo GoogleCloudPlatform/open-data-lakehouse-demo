@@ -8,9 +8,10 @@
 #
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or .
 # See the License for the specific language governing permissions and
 # limitations under the License.
+
 
 variable "project_id" {
   type        = string
@@ -20,11 +21,24 @@ variable "project_id" {
 variable "region" {
   type        = string
   description = "GCP Region"
-  default     = "us-central1"
 }
 
 variable "zone" {
   type        = string
   description = "GCP Zone"
-  default     = "us-central1-c"
+}
+
+variable "subnetwork_id" {
+  type        = string
+  description = "Subnetwork ID for Dataproc Serverless Spark execution"
+}
+
+variable "gcs_main_bucket" {
+  type        = string
+  description = "GCS Main Bucket"
+}
+
+variable "gcs_rest_catalog_bucket" {
+  type        = string
+  description = "GCS REST Catalog Bucket"
 }

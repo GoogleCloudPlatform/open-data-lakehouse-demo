@@ -12,19 +12,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-variable "project_id" {
-  type        = string
-  description = "GCP Project ID"
+provider "google" {
+  project = var.project_id
+  region  = var.region
+  zone    = var.zone
 }
 
-variable "region" {
-  type        = string
-  description = "GCP Region"
-  default     = "us-central1"
-}
-
-variable "zone" {
-  type        = string
-  description = "GCP Zone"
-  default     = "us-central1-c"
+data "google_project" "project" {
+  project_id = var.project_id
 }

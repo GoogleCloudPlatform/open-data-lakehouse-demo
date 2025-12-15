@@ -1,0 +1,403 @@
+{
+  "version": "1",
+  "metadata": {
+    "marimo_version": "0.18.1"
+  },
+  "cells": [
+    {
+      "id": "MJUe",
+      "code_hash": "700bc4b5695abe48b175f95eec52d92d",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/markdown": "<span class=\"markdown prose dark:prose-invert contents\"><h1 id=\"ridership-open-lakehouse-demo-part-0-generating-our-datasets\">Ridership Open Lakehouse Demo (Part 0): Generating our datasets</h1>\n<span class=\"paragraph\">This notebook will demonstrate a strategy to implement an open lakehouse on GCP, using Apache Iceberg,\nas an open source standard for managing data, while still leveraging GCP native capabilities. This demo will use\nBigQuery Manged Iceberg Tables, Managed Apache Kafka and Apache Kafka Connect to ingest streaming data, Vertex AI for Generative AI queries on top of the data and Dataplex to govern tables.</span>\n<span class=\"paragraph\">This notebook will generate fake data and anonymized real-world data.\nthe real-world data used in this notebook is from <a href=\"https://data.ny.gov/Transportation/MTA-Daily-Ridership-Data-2020-2025/vxuj-8kew/data_preview\" rel=\"noopener\" target=\"_blank\">MTA daily ridership data</a>.</span>\n<span class=\"paragraph\">Rest of the data is being randomly generated inside the notebook.</span></span>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "bkHC",
+      "code_hash": "d511ca3b405305bd250314c2062c17f9",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/markdown": "<span class=\"markdown prose dark:prose-invert contents\"><h2 id=\"mta-data-please-read\">MTA Data - PLEASE READ!</h2>\n<span class=\"paragraph\">This part is tricky - this is the raw data from the MTA subways of new york.</span>\n<span class=\"paragraph\">The MTA website and API are slow... very slow. Checking the <a href=\"https://data.ny.gov/Transportation/MTA-Subway-Hourly-Ridership-2020-2024/wujg-7c2s/about_data\" rel=\"noopener\" target=\"_blank\">hourly ridership data</a>, we have about 110 million records to get.</span>\n<span class=\"paragraph\">If you created the demo, using our terraform scripts, you should be able to access the MTA raw CSV under the bucket <code>&lt;YOUR_PROJECT_ID&gt;-ridership-lakehouse</code>, as the terraform script copies over the CSV from a publicly available bucket <code>gs://data-lakehouse-demo-data-assets/mta-raw/</code>.</span>\n<span class=\"paragraph\">If you haven't created this demo using our terraform scripts, the easiest way to get a hold of the data would be to run the following <code>gsutil</code> command:</span>\n<div class=\"language-bash codehilite\"><pre><span></span><code>gsutil<span class=\"w\"> </span>-m<span class=\"w\"> </span>rsync<span class=\"w\"> </span>-r<span class=\"w\"> </span>gs://data-lakehouse-demo-data-assets/<span class=\"w\">  </span>gs://&lt;YOUR_BUCKET_NAME&gt;/\n</code></pre></div>\n<span class=\"paragraph\">Downloading the CSV manually is the more efficient option, but still very slow, so you would have to send the request, and keep your machine and browser awake for a few hours (yes, hours, was about 2 hours in my case) before the CSV starts downloading.</span>\n<span class=\"paragraph\">For programmatic download using the API, the situation might be worse. the API is prone to timeouts. The default records limit per request is 1,000, and the maximum is 50,000, which means we have to do chunking of API calls, but the latency is increasing expo. when increasing the limit.</span>\n<span class=\"paragraph\">I've written the function to download the data and write each request to be appended to a file, but this ran for 4 hours, and got around 8% of the data, before I gave up.</span>\n<span class=\"paragraph\">The next cell has the function to download the data using the API, but the call to the function is commented out, since it is very slow to run.</span>\n<span class=\"paragraph\">The cell after that allows you to fill in the path to GCS, so, whichever method you want to get the data, just make sure, that the variable <code>MTA_RAW_CSV</code> points to a valid and accessible path on GCS that holds the MTA hourly ridership data.</span>\n<span class=\"paragraph\">Happy thoughts!</span></span>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "SFPL",
+      "code_hash": "ac5c022f9424fa6cd6aeec7145339e31",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/markdown": "<span class=\"markdown prose dark:prose-invert contents\"><h3 id=\"the-mta_data_stations-table\">The <code>mta_data_stations</code> table</h3>\n<span class=\"paragraph\">the raw data has a non-normalized dataset, where each station appear in full detail, for each hourly data point\nwe will create a table just for the stations, and we will reference the <code>station_id</code> from the thinner time-series table.</span>\n<span class=\"paragraph\">note, we are saving the results to a pandas dataframe, to be used later</span></span>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "RGSE",
+      "code_hash": "f2289249badb216a1f5ac6f54e12dbe5",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/markdown": "<span class=\"markdown prose dark:prose-invert contents\"><h3 id=\"the-mta_data_parsed-table-temporary-table\">The <code>mta_data_parsed</code> table - temporary table</h3>\n<span class=\"paragraph\">This table is a temporary table to hold an hourly data points, with parsed timestamps and station IDs as integers.</span></span>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "emfo",
+      "code_hash": "8daf9c7e338ad5a2dd9c43b5d11af946",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/markdown": "<span class=\"markdown prose dark:prose-invert contents\"><h3 id=\"the-ridership-table\">The <code>ridership</code> table</h3>\n<span class=\"paragraph\">This is the output table to hold minute-by-minute data points, spreading each hour evenly between 60 minutes within the hour.</span></span>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "iLit",
+      "code_hash": "5306dae661c694d1b059bc34638da588",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/markdown": "<span class=\"markdown prose dark:prose-invert contents\"><h2 id=\"generate-fake-data-for-bus-lines-and-bus-stops-routes\">Generate fake data for bus lines and bus stops (routes)</h2>\n<span class=\"paragraph\">This is based on the stations data in thr original dataset, but the station addresses are faked (using faker),\nand then routes are being constructed just by picking randomly from the stations list. We're using <code>random.sample</code>\nto select a range but without duplicates (as that might create a circular route for a bus, which is not a typical route)</span>\n<span class=\"paragraph\">We will then load the faked data into BigQuery, in order to create time windows of the ridership (that represents people waiting in stations) to simulate bus riders, accumulating riders into a bus driving through their stations.</span></span>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "qnkX",
+      "code_hash": "ad68d83bf68d408877f11e7ba7c94a5b",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/markdown": "<span class=\"markdown prose dark:prose-invert contents\"><span class=\"paragraph\">we will load the <code>bus_lines</code> to BigQuery as an ICEBERG table, and then export it with the ICEBERG manifest and data files. This will enable us to simulate in the next notebook to mount ICEBERG tables coming from external sources.</span></span>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "DnEU",
+      "code_hash": "3fa08451ba4e730f6aab412d1dd3b488",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/markdown": "<span class=\"markdown prose dark:prose-invert contents\"><h2 id=\"extract-data-to-gcs\">Extract data to GCS</h2>\n<span class=\"paragraph\">Now, that we have all data we need, the data needs to reside in BigQuery &amp; GCS, we will extract the BigQuery tables to GCS, so we can load them in the next notebook, where we build the open source data lakehouse.</span>\n<ul>\n<li><code>bus_stations</code> - we will just use our CSV we built locally, and upload it as is to GCS.</li>\n<li><code>bus_lines</code> - we will export the data as <code>parquet</code> format, to be read by spark in the next notebook, to demonstrate iceberg <strong>external</strong> tables.</li>\n<li><code>ridership</code> - this table is the largest by far (972,829,500 rows). We will export this table to parquet format to be loaded as a managed iceberg table.</li>\n</ul></span>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "setup",
+      "code_hash": "1b815e44ddaf6dbafeedcd6858e94ca7",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/plain": ""
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "Hbol",
+      "code_hash": "12c13ec6fbf3a71ce5628e7a978d79bb",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/plain": ""
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "vblA",
+      "code_hash": "c62a07fd252a32a50751ca8a0634480c",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/html": "<pre class='text-xs'>Dataset(DatasetReference(&#x27;lakehouse-demo-7000&#x27;, &#x27;ridership_lakehouse_staging&#x27;))</pre>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "lEQa",
+      "code_hash": "0d8c28700423eb50564f5a25561635e0",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/plain": ""
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "PKri",
+      "code_hash": "7cca3d325915d5a000f538ad0350bea7",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/plain": ""
+          }
+        }
+      ],
+      "console": [
+        {
+          "type": "stream",
+          "name": "stdout",
+          "text": "Path 'gs://lakehouse-demo-7000-ridership-lakehouse/mta-raw/mta-manual-downloaded-data_MTA_Subway_Hourly_Ridership.csv' found\n",
+          "mimetype": "text/plain"
+        }
+      ]
+    },
+    {
+      "id": "Xref",
+      "code_hash": "990726ea4af38e789a3b7c00d9c02880",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/plain": ""
+          }
+        }
+      ],
+      "console": [
+        {
+          "type": "stream",
+          "name": "stdout",
+          "text": "created ridership_lakehouse_staging.raw_mta_data\n",
+          "mimetype": "text/plain"
+        }
+      ]
+    },
+    {
+      "id": "BYtC",
+      "code_hash": "fb01b8e4692276bd90e68ce072d03048",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/html": "<marimo-ui-element object-id='BYtC-0' random-id='37785e0d-ffd9-1e95-72ba-a5785bed7463'><marimo-table data-initial-value='[]' data-label='null' data-data='&quot;[{&#92;&quot;station_id&#92;&quot;:433,&#92;&quot;station_complex&#92;&quot;:&#92;&quot;Jackson Av (2,5)&#92;&quot;,&#92;&quot;borough&#92;&quot;:&#92;&quot;Bronx&#92;&quot;,&#92;&quot;latitude&#92;&quot;:40.81649,&#92;&quot;longitude&#92;&quot;:-73.90781},{&#92;&quot;station_id&#92;&quot;:372,&#92;&quot;station_complex&#92;&quot;:&#92;&quot;Longwood Av (6)&#92;&quot;,&#92;&quot;borough&#92;&quot;:&#92;&quot;Bronx&#92;&quot;,&#92;&quot;latitude&#92;&quot;:40.816105,&#92;&quot;longitude&#92;&quot;:-73.89644},{&#92;&quot;station_id&#92;&quot;:380,&#92;&quot;station_complex&#92;&quot;:&#92;&quot;Bedford Park Blvd-Lehman College (4)&#92;&quot;,&#92;&quot;borough&#92;&quot;:&#92;&quot;Bronx&#92;&quot;,&#92;&quot;latitude&#92;&quot;:40.873413,&#92;&quot;longitude&#92;&quot;:-73.89006},{&#92;&quot;station_id&#92;&quot;:373,&#92;&quot;station_complex&#92;&quot;:&#92;&quot;E 149 St (6)&#92;&quot;,&#92;&quot;borough&#92;&quot;:&#92;&quot;Bronx&#92;&quot;,&#92;&quot;latitude&#92;&quot;:40.81212,&#92;&quot;longitude&#92;&quot;:-73.9041},{&#92;&quot;station_id&#92;&quot;:442,&#92;&quot;station_complex&#92;&quot;:&#92;&quot;Eastchester-Dyre Av (5)&#92;&quot;,&#92;&quot;borough&#92;&quot;:&#92;&quot;Bronx&#92;&quot;,&#92;&quot;latitude&#92;&quot;:40.8883,&#92;&quot;longitude&#92;&quot;:-73.83083},{&#92;&quot;station_id&#92;&quot;:369,&#92;&quot;station_complex&#92;&quot;:&#92;&quot;Elder Av (6)&#92;&quot;,&#92;&quot;borough&#92;&quot;:&#92;&quot;Bronx&#92;&quot;,&#92;&quot;latitude&#92;&quot;:40.828583,&#92;&quot;longitude&#92;&quot;:-73.87916},{&#92;&quot;station_id&#92;&quot;:422,&#92;&quot;station_complex&#92;&quot;:&#92;&quot;Burke Av (2,5)&#92;&quot;,&#92;&quot;borough&#92;&quot;:&#92;&quot;Bronx&#92;&quot;,&#92;&quot;latitude&#92;&quot;:40.871357,&#92;&quot;longitude&#92;&quot;:-73.867165},{&#92;&quot;station_id&#92;&quot;:371,&#92;&quot;station_complex&#92;&quot;:&#92;&quot;Hunts Point Av (6)&#92;&quot;,&#92;&quot;borough&#92;&quot;:&#92;&quot;Bronx&#92;&quot;,&#92;&quot;latitude&#92;&quot;:40.82095,&#92;&quot;longitude&#92;&quot;:-73.89055},{&#92;&quot;station_id&#92;&quot;:374,&#92;&quot;station_complex&#92;&quot;:&#92;&quot;E 143 St-St Mary&#x27;s St (6)&#92;&quot;,&#92;&quot;borough&#92;&quot;:&#92;&quot;Bronx&#92;&quot;,&#92;&quot;latitude&#92;&quot;:40.80872,&#92;&quot;longitude&#92;&quot;:-73.90765},{&#92;&quot;station_id&#92;&quot;:386,&#92;&quot;station_complex&#92;&quot;:&#92;&quot;Mt Eden Av (4)&#92;&quot;,&#92;&quot;borough&#92;&quot;:&#92;&quot;Bronx&#92;&quot;,&#92;&quot;latitude&#92;&quot;:40.844433,&#92;&quot;longitude&#92;&quot;:-73.91469}]&quot;' data-total-rows='428' data-total-columns='5' data-max-columns='50' data-banner-text='&quot;&quot;' data-pagination='true' data-page-size='10' data-field-types='[[&quot;station_id&quot;,[&quot;integer&quot;,&quot;Int64&quot;]],[&quot;station_complex&quot;,[&quot;string&quot;,&quot;object&quot;]],[&quot;borough&quot;,[&quot;string&quot;,&quot;object&quot;]],[&quot;latitude&quot;,[&quot;number&quot;,&quot;float64&quot;]],[&quot;longitude&quot;,[&quot;number&quot;,&quot;float64&quot;]]]' data-show-filters='true' data-show-download='true' data-show-column-summaries='true' data-show-data-types='true' data-show-page-size-selector='true' data-show-column-explorer='true' data-show-chart-builder='true' data-row-headers='[]' data-has-stable-row-id='false' data-lazy='false' data-preload='false'></marimo-table></marimo-ui-element>"
+          }
+        }
+      ],
+      "console": [
+        {
+          "type": "stream",
+          "name": "stderr",
+          "text": "/usr/local/google/home/eyalbenivri/projects/open-data-lakehouse-demo/data-journey/.venv/lib/python3.14/site-packages/google/cloud/bigquery/table.py:1994: UserWarning: BigQuery Storage module not found, fetch data with the REST endpoint instead.\n  warnings.warn(\n",
+          "mimetype": "text/plain"
+        }
+      ]
+    },
+    {
+      "id": "Kclp",
+      "code_hash": "a358e73cda75c3f030a34e2eccdb9dc4",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/html": "<marimo-ui-element object-id='Kclp-0' random-id='0c9b8281-8e1a-9754-ad47-1d26a0ab4984'><marimo-table data-initial-value='[]' data-label='null' data-data='&quot;[{&#92;&quot;transit_timestamp&#92;&quot;:&#92;&quot;2020-08-19 03:00:00+00:00&#92;&quot;,&#92;&quot;station_id&#92;&quot;:1,&#92;&quot;ridership&#92;&quot;:1},{&#92;&quot;transit_timestamp&#92;&quot;:&#92;&quot;2023-05-07 10:00:00+00:00&#92;&quot;,&#92;&quot;station_id&#92;&quot;:1,&#92;&quot;ridership&#92;&quot;:1},{&#92;&quot;transit_timestamp&#92;&quot;:&#92;&quot;2023-06-04 15:00:00+00:00&#92;&quot;,&#92;&quot;station_id&#92;&quot;:2,&#92;&quot;ridership&#92;&quot;:1},{&#92;&quot;transit_timestamp&#92;&quot;:&#92;&quot;2021-04-19 01:00:00+00:00&#92;&quot;,&#92;&quot;station_id&#92;&quot;:2,&#92;&quot;ridership&#92;&quot;:1},{&#92;&quot;transit_timestamp&#92;&quot;:&#92;&quot;2021-01-09 01:00:00+00:00&#92;&quot;,&#92;&quot;station_id&#92;&quot;:2,&#92;&quot;ridership&#92;&quot;:1},{&#92;&quot;transit_timestamp&#92;&quot;:&#92;&quot;2021-04-13 03:00:00+00:00&#92;&quot;,&#92;&quot;station_id&#92;&quot;:2,&#92;&quot;ridership&#92;&quot;:1},{&#92;&quot;transit_timestamp&#92;&quot;:&#92;&quot;2023-07-31 00:00:00+00:00&#92;&quot;,&#92;&quot;station_id&#92;&quot;:2,&#92;&quot;ridership&#92;&quot;:1},{&#92;&quot;transit_timestamp&#92;&quot;:&#92;&quot;2021-04-12 03:00:00+00:00&#92;&quot;,&#92;&quot;station_id&#92;&quot;:4,&#92;&quot;ridership&#92;&quot;:1},{&#92;&quot;transit_timestamp&#92;&quot;:&#92;&quot;2021-03-02 03:00:00+00:00&#92;&quot;,&#92;&quot;station_id&#92;&quot;:4,&#92;&quot;ridership&#92;&quot;:1},{&#92;&quot;transit_timestamp&#92;&quot;:&#92;&quot;2023-06-03 01:00:00+00:00&#92;&quot;,&#92;&quot;station_id&#92;&quot;:5,&#92;&quot;ridership&#92;&quot;:1}]&quot;' data-total-rows='20' data-total-columns='3' data-max-columns='50' data-banner-text='&quot;&quot;' data-pagination='true' data-page-size='10' data-field-types='[[&quot;transit_timestamp&quot;,[&quot;datetime&quot;,&quot;datetime64[us, UTC]&quot;]],[&quot;station_id&quot;,[&quot;integer&quot;,&quot;Int64&quot;]],[&quot;ridership&quot;,[&quot;integer&quot;,&quot;Int64&quot;]]]' data-show-filters='true' data-show-download='true' data-show-column-summaries='true' data-show-data-types='true' data-show-page-size-selector='true' data-show-column-explorer='true' data-show-chart-builder='true' data-row-headers='[]' data-has-stable-row-id='false' data-lazy='false' data-preload='false'></marimo-table></marimo-ui-element>"
+          }
+        }
+      ],
+      "console": [
+        {
+          "type": "stream",
+          "name": "stderr",
+          "text": "/usr/local/google/home/eyalbenivri/projects/open-data-lakehouse-demo/data-journey/.venv/lib/python3.14/site-packages/google/cloud/bigquery/table.py:1994: UserWarning: BigQuery Storage module not found, fetch data with the REST endpoint instead.\n  warnings.warn(\n",
+          "mimetype": "text/plain"
+        }
+      ]
+    },
+    {
+      "id": "Hstk",
+      "code_hash": "3126aef62e77e5c511fc2b7d5695c29b",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/html": "<marimo-ui-element object-id='Hstk-0' random-id='710ef9cc-3af3-9bdc-3fa5-ff573ea250dc'><marimo-table data-initial-value='[]' data-label='null' data-data='&quot;[{&#92;&quot;transit_timestamp&#92;&quot;:&#92;&quot;2022-05-22 10:27:00+00:00&#92;&quot;,&#92;&quot;station_id&#92;&quot;:427,&#92;&quot;ridership&#92;&quot;:1},{&#92;&quot;transit_timestamp&#92;&quot;:&#92;&quot;2021-07-21 13:32:00+00:00&#92;&quot;,&#92;&quot;station_id&#92;&quot;:129,&#92;&quot;ridership&#92;&quot;:3},{&#92;&quot;transit_timestamp&#92;&quot;:&#92;&quot;2021-04-30 10:41:00+00:00&#92;&quot;,&#92;&quot;station_id&#92;&quot;:347,&#92;&quot;ridership&#92;&quot;:2},{&#92;&quot;transit_timestamp&#92;&quot;:&#92;&quot;2022-09-10 05:53:00+00:00&#92;&quot;,&#92;&quot;station_id&#92;&quot;:388,&#92;&quot;ridership&#92;&quot;:2},{&#92;&quot;transit_timestamp&#92;&quot;:&#92;&quot;2020-12-02 15:29:00+00:00&#92;&quot;,&#92;&quot;station_id&#92;&quot;:99,&#92;&quot;ridership&#92;&quot;:3},{&#92;&quot;transit_timestamp&#92;&quot;:&#92;&quot;2024-07-18 20:18:00+00:00&#92;&quot;,&#92;&quot;station_id&#92;&quot;:76,&#92;&quot;ridership&#92;&quot;:1},{&#92;&quot;transit_timestamp&#92;&quot;:&#92;&quot;2022-01-19 19:42:00+00:00&#92;&quot;,&#92;&quot;station_id&#92;&quot;:38,&#92;&quot;ridership&#92;&quot;:2},{&#92;&quot;transit_timestamp&#92;&quot;:&#92;&quot;2021-03-30 13:51:00+00:00&#92;&quot;,&#92;&quot;station_id&#92;&quot;:76,&#92;&quot;ridership&#92;&quot;:2},{&#92;&quot;transit_timestamp&#92;&quot;:&#92;&quot;2022-09-02 19:57:00+00:00&#92;&quot;,&#92;&quot;station_id&#92;&quot;:298,&#92;&quot;ridership&#92;&quot;:2},{&#92;&quot;transit_timestamp&#92;&quot;:&#92;&quot;2024-12-04 05:17:00+00:00&#92;&quot;,&#92;&quot;station_id&#92;&quot;:64,&#92;&quot;ridership&#92;&quot;:3}]&quot;' data-total-rows='20' data-total-columns='3' data-max-columns='50' data-banner-text='&quot;&quot;' data-pagination='true' data-page-size='10' data-field-types='[[&quot;transit_timestamp&quot;,[&quot;datetime&quot;,&quot;datetime64[us, UTC]&quot;]],[&quot;station_id&quot;,[&quot;integer&quot;,&quot;Int64&quot;]],[&quot;ridership&quot;,[&quot;integer&quot;,&quot;Int64&quot;]]]' data-show-filters='true' data-show-download='true' data-show-column-summaries='true' data-show-data-types='true' data-show-page-size-selector='true' data-show-column-explorer='true' data-show-chart-builder='true' data-row-headers='[]' data-has-stable-row-id='false' data-lazy='false' data-preload='false'></marimo-table></marimo-ui-element>"
+          }
+        }
+      ],
+      "console": [
+        {
+          "type": "stream",
+          "name": "stderr",
+          "text": "/usr/local/google/home/eyalbenivri/projects/open-data-lakehouse-demo/data-journey/.venv/lib/python3.14/site-packages/google/cloud/bigquery/table.py:1994: UserWarning: BigQuery Storage module not found, fetch data with the REST endpoint instead.\n  warnings.warn(\n",
+          "mimetype": "text/plain"
+        }
+      ]
+    },
+    {
+      "id": "nWHF",
+      "code_hash": "73e89fbb80dc1b34749dbd56346bc9f9",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/html": "<marimo-ui-element object-id='nWHF-0' random-id='39371d84-0b4c-a87c-3e61-f1daca3031f0'><marimo-table data-initial-value='[]' data-label='null' data-data='&quot;[]&quot;' data-total-rows='0' data-total-columns='4' data-max-columns='50' data-banner-text='&quot;&quot;' data-pagination='true' data-page-size='10' data-field-types='[[&quot;transit_timestamp&quot;,[&quot;datetime&quot;,&quot;datetime64[us, UTC]&quot;]],[&quot;station_id&quot;,[&quot;integer&quot;,&quot;Int64&quot;]],[&quot;ridership_agg&quot;,[&quot;integer&quot;,&quot;Int64&quot;]],[&quot;ridership&quot;,[&quot;integer&quot;,&quot;Int64&quot;]]]' data-show-filters='true' data-show-download='true' data-show-column-summaries='false' data-show-data-types='true' data-show-page-size-selector='false' data-show-column-explorer='true' data-show-chart-builder='true' data-row-headers='[]' data-has-stable-row-id='false' data-lazy='false' data-preload='false'></marimo-table></marimo-ui-element>"
+          }
+        }
+      ],
+      "console": [
+        {
+          "type": "stream",
+          "name": "stderr",
+          "text": "/usr/local/google/home/eyalbenivri/projects/open-data-lakehouse-demo/data-journey/.venv/lib/python3.14/site-packages/google/cloud/bigquery/table.py:1994: UserWarning: BigQuery Storage module not found, fetch data with the REST endpoint instead.\n  warnings.warn(\n",
+          "mimetype": "text/plain"
+        }
+      ]
+    },
+    {
+      "id": "ZHCJ",
+      "code_hash": "88b47edf2ac93c2bf54ac7c88f8d6ad5",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/plain": ""
+          }
+        }
+      ],
+      "console": [
+        {
+          "type": "stream",
+          "name": "stdout",
+          "text": "Generated 25 random bus lines. One for example: {'bus_line_id': 24, 'bus_line': 'Q-476', 'number_of_stops': 37, 'stops': [232, 276, 203, 987651, 42, 4, 173, 627, 398, 348, 363, 307, 414, 407, 270, 77, 248, 344, 201, 114, 266, 52, 476, 17, 273, 157, 327, 143, 75, 405, 118, 246, 180, 296, 303, 33, 326], 'frequency_minutes': 5}\nAnonymized 428 bus_stations. The first stations for the random bus line above is: {'bus_stop_id': 232, 'address': '46566 April Street, North Andreaside', 'school_zone': True, 'seating': True, 'borough': 'Manhattan', 'latitude': 40.7234, 'longitude': -73.98994}\n",
+          "mimetype": "text/plain"
+        }
+      ]
+    },
+    {
+      "id": "ROlb",
+      "code_hash": "732c6ba2a48cdb21ec11648e73ec7b64",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/plain": ""
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "TqIu",
+      "code_hash": "e7e1c84a2d2588f429f0746e5999742a",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/plain": ""
+          }
+        }
+      ],
+      "console": [
+        {
+          "type": "stream",
+          "name": "stdout",
+          "text": "created ridership_lakehouse_staging.bus_lines\n",
+          "mimetype": "text/plain"
+        }
+      ]
+    },
+    {
+      "id": "Vxnm",
+      "code_hash": "34f1f4474689a14af797af3a4de19b54",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/plain": ""
+          }
+        }
+      ],
+      "console": [
+        {
+          "type": "stream",
+          "name": "stdout",
+          "text": "created ridership_lakehouse_staging.bus_stations\n",
+          "mimetype": "text/plain"
+        }
+      ]
+    },
+    {
+      "id": "ulZA",
+      "code_hash": "e8ba2acca4a017245c48b9f38d308539",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/plain": ""
+          }
+        }
+      ],
+      "console": [
+        {
+          "type": "stream",
+          "name": "stderr",
+          "text": "/usr/local/google/home/eyalbenivri/projects/open-data-lakehouse-demo/data-journey/.venv/lib/python3.14/site-packages/google_crc32c/__init__.py:29: RuntimeWarning: As the c extension couldn't be imported, `google-crc32c` is using a pure python implementation that is significantly slower. If possible, please configure a c build environment and compile the extension\n  warnings.warn(_SLOW_CRC32C_WARNING, RuntimeWarning)\n",
+          "mimetype": "text/plain"
+        }
+      ]
+    },
+    {
+      "id": "ecfG",
+      "code_hash": "45109f24f1963e5194890d0485b75359",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/html": "<pre class='text-xs'>ExtractJob&lt;project=lakehouse-demo-7000, location=us-central1, id=908f027b-151f-437b-934f-0bffbc4a3325&gt;</pre>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "Pvdt",
+      "code_hash": "be2ee5ce582b743d978a1a666fc0ade8",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/html": "<pre class='text-xs'>ExtractJob&lt;project=lakehouse-demo-7000, location=us-central1, id=ab0df16d-51af-4e86-b4ef-eb5a26b12948&gt;</pre>"
+          }
+        }
+      ],
+      "console": []
+    }
+  ]
+}
