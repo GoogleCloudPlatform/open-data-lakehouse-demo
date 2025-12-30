@@ -21,13 +21,13 @@ The architecture typically includes:
 Before you begin, ensure you have the following installed:
 
 - Terraform
-- gsutil
+- gcloud storage
 
 ## Deployment
 
 This project might include Terraform configurations for deploying to cloud providers like AWS.
 
-1. **Make sure your gsutil/gcloud is authenticated :**
+1. **Make sure your gcloud is authenticated :**
    Ensure your gcloud utility is configured with appropriate credentials and a default region.
    ```bash
    gcloud auth
