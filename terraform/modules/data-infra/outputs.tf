@@ -14,14 +14,9 @@ output "kafka_alert_topic" {
   value = google_managed_kafka_topic.capacity_alerts.topic_id
 }
 
-output "kafka_service_account_email" {
-  description = "Service Account Email for Kafka ACL"
-  value       = google_service_account.kafka_service_account.email
-}
-
-output "spark_service_account_email" {
-  description = "Service Account Email for Spark ACL"
-  value       = google_service_account.spark_service_account.email
+output "backend_service_account_email" {
+  description = "Service Account Email for Backend services (Kafka, Spark)"
+  value       = google_service_account.backend_service_account.email
 }
 
 output "bq_connection_name" {

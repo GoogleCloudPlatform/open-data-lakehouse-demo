@@ -29,9 +29,14 @@ fi
 
 echo "DATA_JOURNEY_DIR=${DATA_JOURNEY_DIR}"
 echo "Building webapp image... (TAG=${TAG}; PROJECT_ID=${PROJECT_ID}; REGION=${REGION}; SERVICE_ACCOUNT=${SERVICE_ACCOUNT})"
+
+# Set the project
+gcloud config set project ${PROJECT_ID}
+
 gcloud builds submit ${DATA_JOURNEY_DIR} \
       --tag ${TAG} \
       --project ${PROJECT_ID} \
       --region ${REGION} \
+      --billing-project ${PROJECT_ID} \
       --default-buckets-behavior regional-user-owned-bucket \
       --service-account  "projects/${PROJECT_ID}/serviceAccounts/${SERVICE_ACCOUNT}"

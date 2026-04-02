@@ -12,14 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-resource "google_service_account" "kafka_service_account" {
-  account_id   = "kafka-service-account"
-  display_name = "Kafka Service Account"
-}
-
-resource "google_service_account" "spark_service_account" {
-  account_id   = "spark-service-account"
-  display_name = "Spark Service Account"
+resource "google_service_account" "backend_service_account" {
+  account_id   = "backend-service-account"
+  display_name = "Backend Service Account"
+  project      = var.project_id
 }
 
 
@@ -32,16 +28,21 @@ resource "google_project_iam_member" "ridership_dataset_sa_gcs_reader" {
   member = "serviceAccount:${google_bigquery_connection.cloud_resources_connection.cloud_resource[0].service_account_id}"
 }
 
-resource "google_project_iam_member" "spark_sa_roles" {
+resource "google_project_iam_member" "backend_sa_roles" {
   for_each = toset([
     "roles/dataproc.worker",
     "roles/bigquery.dataEditor",
+    "roles/bigquery.dataViewer",
     "roles/bigquery.jobUser",
+    "roles/bigquery.user",
     "roles/storage.objectUser",
     "roles/dataproc.editor",
-    "roles/logging.logWriter"
+    "roles/logging.logWriter",
+    "roles/serviceusage.serviceUsageConsumer",
+    "roles/biglake.editor",
+    "roles/managedkafka.client",
   ])
   project = var.project_id
   role    = each.value
-  member  = "serviceAccount:${google_service_account.spark_service_account.email}"
+  member  = "serviceAccount:${google_service_account.backend_service_account.email}"
 }

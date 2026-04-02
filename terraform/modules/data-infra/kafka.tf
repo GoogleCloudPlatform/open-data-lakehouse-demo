@@ -73,7 +73,7 @@ resource "google_managed_kafka_acl" "bus_updates_topic_sa_acl" {
   project  = var.project_id
 
   acl_entries {
-    principal       = "User:${google_service_account.kafka_service_account.email}"
+    principal       = "User:${google_service_account.backend_service_account.email}"
     permission_type = "ALLOW"
     operation       = "ALL"
     host            = "*"
@@ -93,7 +93,7 @@ resource "google_managed_kafka_acl" "capacity_alerts_topic_sa_acl" {
   project  = var.project_id
 
   acl_entries {
-    principal       = "User:${google_service_account.kafka_service_account.email}"
+    principal       = "User:${google_service_account.backend_service_account.email}"
     permission_type = "ALLOW"
     operation       = "ALL"
     host            = "*"

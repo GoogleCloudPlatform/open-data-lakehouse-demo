@@ -49,7 +49,7 @@ module "webapp" {
   kafka_alert_topic           = module.data_infra.kafka_alert_topic
   kafka_bootstrap             = module.data_infra.kafka_bootstrap
   network_id                  = module.general_infra.network_id
-  spark_service_account_email = module.data_infra.spark_service_account_email
+  spark_service_account_email = module.data_infra.backend_service_account_email
   spark_tmp_bucket            = module.general_infra.spark_bucket
 }
 
@@ -68,6 +68,7 @@ module "data_journey" {
   rest_catalog_bucket_name = module.general_infra.rest_catalog_bucket_name
   staging_bq_dataset       = module.data_infra.staging_bq_dataset
   build_service_account    = module.general_infra.cloud_build_sa_email
+  spark_service_account    = module.data_infra.backend_service_account_email
 }
 
 module "buses-dashboard" {
@@ -84,6 +85,6 @@ module "buses-dashboard" {
   kafka_alert_topic           = module.data_infra.kafka_alert_topic
   kafka_bootstrap             = module.data_infra.kafka_bootstrap
   network_id                  = module.general_infra.network_id
-  spark_service_account_email = module.data_infra.spark_service_account_email
+  spark_service_account_email = module.data_infra.backend_service_account_email
   spark_tmp_bucket            = module.general_infra.spark_bucket
 }

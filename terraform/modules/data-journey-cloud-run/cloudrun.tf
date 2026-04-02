@@ -35,8 +35,9 @@ module "cloud_run_app" {
     BQ_CATALOG_BUCKET_NAME   = var.bq_catalog_bucket_name
     REST_CATALOG_BUCKET_NAME = var.rest_catalog_bucket_name
     SUBNETWORK_ID            = var.subnetwork_id
+    SPARK_SERVICE_ACCOUNT    = var.spark_service_account
   }
-
+  depends_on = [ module.container_build ]
   invoker_iam_members = ["allUsers"]
 }
 

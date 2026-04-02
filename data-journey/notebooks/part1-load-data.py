@@ -16,11 +16,13 @@ with app.setup:
         BQ_CATALOG_BUCKET_NAME,
         REST_CATALOG_BUCKET_NAME,
         MAIN_BQ_DATASET, 
-        BQ_CONNECTION_NAME,
+        FULL_BQ_CONNECTION_NAME,
         BQ_CATALOG_PREFIX,
         REST_CATALOG_PREFIX,
         LakehouseBigQueryClient,
         LakehouseStorageClient,
+        SUBNETWORK_ID,
+        SPARK_SERVICE_ACCOUNT,
         sh,
     )
 
@@ -222,7 +224,7 @@ def _(bus_stops_uri):
       latitude FLOAT64,
       longitude FLOAT64
     )
-    WITH CONNECTION `{PROJECT_ID}.{LOCATION}.{BQ_CONNECTION_NAME}`
+    WITH CONNECTION `{FULL_BQ_CONNECTION_NAME}`
     OPTIONS (
       file_format = 'PARQUET',
       table_format = 'ICEBERG',
@@ -375,25 +377,25 @@ def _(bus_stops_prefix):
             BQ_CATALOG_BUCKET_NAME, match_glob=f"{bus_stops_prefix}/metadata/*"
         )
     )
+    metadata_blobs = list(
+        filter(lambda x: x.name.endswith("metadata.json"), all_metadata_blobs)
+    )
+    latest_version_metadata = metadata_blobs[-1]
+    latest_version = latest_version_metadata.name.replace("metadata.json", "")
 
-    version_hint_blob = list(
-        filter(lambda x: x.name.endswith("version-hint.text"), all_metadata_blobs)
-    )[0]
-    version_hint = version_hint_blob.download_as_string().decode("utf-8")
 
     with mo.redirect_stdout():
         # The version hint just has the right version, so now we know which json file to look for
-        print(f"Latest Version of metadata: {version_hint}")
+        print(f"Latest Version of metadata: {latest_version}")
         print("")
         print("-" * 20)
 
-        latest_json_file = list(
-            filter(
-                lambda x: x.name.endswith(f"v{version_hint}.metadata.json"), all_metadata_blobs
-            )
-        )[0]
-        latest_json = json.loads(latest_json_file.download_as_string().decode("utf-8"))
-        print(f"Latest metadata from our metadata file (v{version_hint}.metadata.json):")
+        latest_json = json.loads(
+            latest_version_metadata.download_as_string().decode("utf-8")
+        )
+        print(
+            f"Latest metadata from our metadata file (v{latest_version}.metadata.json):"
+        )
 
         mo.output.append(mo.json(latest_json))
     return (all_metadata_blobs,)
@@ -520,9 +522,12 @@ def _():
 @app.cell
 def _():
     from google.cloud.dataproc_spark_connect import DataprocSparkSession
-    from google.cloud.dataproc_v1 import Session
+    from google.cloud.dataproc_v1 import Session, AuthenticationConfig
 
     session = Session()
+    session.environment_config.execution_config.subnetwork_uri = SUBNETWORK_ID
+    session.environment_config.execution_config.service_account = SPARK_SERVICE_ACCOUNT
+    session.environment_config.execution_config.authentication_config.user_workload_authentication_type = AuthenticationConfig.AuthenticationType.SERVICE_ACCOUNT
 
     catalog_name = "external_catalog"
 
@@ -556,9 +561,13 @@ def _():
 
     # Create the Spark session. This will take some time.
     spark: DataprocSparkSession = (
-        DataprocSparkSession.builder.appName("mount-bus-lines")
-        .dataprocSessionConfig(session)
-        .getOrCreate()
+        DataprocSparkSession.builder
+            .appName("mount-bus-lines")
+            .projectId(PROJECT_ID)
+            .location(LOCATION)
+            .subnetwork(SUBNETWORK_ID)
+            .dataprocSessionConfig(session)
+            .getOrCreate()
     )
     return (spark,)
 
@@ -582,9 +591,9 @@ def _(spark: "DataprocSparkSession"):
 
 
 @app.cell
-def _(display_blobs_with_prefix):
+def _():
     # Now we can see the data written in our EXTERNAL catalog bucket.
-    display_blobs_with_prefix(REST_CATALOG_BUCKET_NAME, REST_CATALOG_PREFIX)
+    storage_client.display_blobs_with_prefix(REST_CATALOG_BUCKET_NAME, REST_CATALOG_PREFIX)
     return
 
 
@@ -606,7 +615,7 @@ def _():
 
 
 @app.cell
-def _(BQ_DATASET):
+def _():
     metadata_blob = list(
         storage_client.list_blobs(
             REST_CATALOG_BUCKET_NAME,
@@ -616,8 +625,8 @@ def _(BQ_DATASET):
 
     bigquery_client.query(
         f"""
-    CREATE OR REPLACE EXTERNAL TABLE `{BQ_DATASET}.bus_lines`
-      WITH CONNECTION `{PROJECT_ID}.{LOCATION}.{BQ_CONNECTION_NAME}`
+    CREATE OR REPLACE EXTERNAL TABLE `{MAIN_BQ_DATASET}.bus_lines`
+      WITH CONNECTION `{FULL_BQ_CONNECTION_NAME}`
       OPTIONS (
              format = 'ICEBERG',
              uris = ["gs://{REST_CATALOG_BUCKET_NAME}/{metadata_blob.name}"]
@@ -628,9 +637,9 @@ def _(BQ_DATASET):
 
 
 @app.cell
-def _(select_top_rows):
+def _():
     # show sample rows
-    select_top_rows("bus_lines")
+    bigquery_client.select_top_rows(MAIN_BQ_DATASET, "bus_lines")
     return
 
 
@@ -652,23 +661,23 @@ def _():
 
 
 @app.cell
-def _(BQ_DATASET, delete_blobs_with_prefix):
+def _():
     ridership_prefix = f"{BQ_CATALOG_PREFIX}/ridership/"
     ridership_uri = f"gs://{BQ_CATALOG_BUCKET_NAME}/{ridership_prefix}"
 
 
-    delete_blobs_with_prefix(BQ_CATALOG_BUCKET_NAME, ridership_prefix)
+    storage_client.delete_blobs_with_prefix(BQ_CATALOG_BUCKET_NAME, ridership_prefix)
 
-    bigquery_client.query(f"DROP TABLE IF EXISTS {BQ_DATASET}.ridership;").result()
+    bigquery_client.query(f"DROP TABLE IF EXISTS {MAIN_BQ_DATASET}.ridership;").result()
 
     _create_table_stmt = f"""
-        CREATE TABLE {BQ_DATASET}.ridership (
+        CREATE TABLE {MAIN_BQ_DATASET}.ridership (
             transit_timestamp TIMESTAMP,
             station_id INTEGER,
             ridership INTEGER
         )
         CLUSTER BY transit_timestamp
-        WITH CONNECTION `{PROJECT_ID}.{LOCATION}.{BQ_CONNECTION_NAME}`
+        WITH CONNECTION `{FULL_BQ_CONNECTION_NAME}`
         OPTIONS (
             file_format = 'PARQUET',
             table_format = 'ICEBERG',
@@ -680,36 +689,36 @@ def _(BQ_DATASET, delete_blobs_with_prefix):
 
 
 @app.cell
-def _(BQ_DATASET, dataset_ref):
+def _(dataset_ref):
     # Load data into the table
     table_ref = dataset_ref.table('ridership')
-    truncate_1 = bigquery_client.query(f'DELETE FROM {BQ_DATASET}.ridership WHERE TRUE')
+    truncate_1 = bigquery_client.query(f'DELETE FROM {MAIN_BQ_DATASET}.ridership WHERE TRUE')
     # BQ tables for Apache Iceberg do not support load with truncating, so we will truncate manually, and then load
     truncate_1.result()
     job_config_1 = bigquery.LoadJobConfig(write_disposition=bigquery.WriteDisposition.WRITE_APPEND, source_format=bigquery.SourceFormat.PARQUET)
     job_1 = bigquery_client.load_table_from_uri(f'gs://{GENERAL_BUCKET_NAME}/staged-data/ridership/*.parquet', table_ref, job_config=job_config_1)
     job_1.result()
     # Export the metadata
-    bigquery_client.query(f'EXPORT TABLE METADATA FROM {BQ_DATASET}.ridership').result()
+    bigquery_client.query(f'EXPORT TABLE METADATA FROM {MAIN_BQ_DATASET}.ridership').result()
     return
 
 
 @app.cell
-def _(select_top_rows):
+def _():
     # show sample rows
-    select_top_rows("ridership")
+    bigquery_client.select_top_rows(MAIN_BQ_DATASET, "ridership")
     return
 
 
 @app.cell
-def _(display_blobs_with_prefix, ridership_prefix):
-    display_blobs_with_prefix(BQ_CATALOG_BUCKET_NAME, ridership_prefix + "data/")
+def _(ridership_prefix):
+    storage_client.display_blobs_with_prefix(BQ_CATALOG_BUCKET_NAME, ridership_prefix + "data/")
     return
 
 
 @app.cell
-def _(display_blobs_with_prefix, ridership_prefix):
-    display_blobs_with_prefix(BQ_CATALOG_BUCKET_NAME, ridership_prefix + "metadata")
+def _(ridership_prefix):
+    storage_client.display_blobs_with_prefix(BQ_CATALOG_BUCKET_NAME, ridership_prefix + "metadata")
     return
 
 

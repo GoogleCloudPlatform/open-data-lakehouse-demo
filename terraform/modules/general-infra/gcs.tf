@@ -86,17 +86,17 @@ resource "google_storage_bucket" "spark_bucket" {
 }
 
 resource "google_storage_bucket_object" "notebooks_assets" {
-  for_each       = fileset("${path.module}/../assets/notebooks", "*.ipynb")
+  for_each       = fileset("${path.module}/../../../assets/notebooks", "*.ipynb")
   bucket         = google_storage_bucket.data_lakehouse_bucket.name
   name           = "notebooks/${each.value}"
-  source         = "${path.module}/../assets/notebooks/${each.value}"
-  source_md5hash = filemd5("${path.module}/../assets/notebooks/${each.value}")
+  source         = "${path.module}/../../../assets/notebooks/${each.value}"
+  source_md5hash = filemd5("${path.module}/../../../assets/notebooks/${each.value}")
 }
 
 resource "google_storage_bucket_object" "code_assets" {
-  for_each       = fileset("${path.module}/../assets/code", "**")
+  for_each       = fileset("${path.module}/../../../assets/code", "**")
   bucket         = google_storage_bucket.data_lakehouse_bucket.name
   name           = "code/${each.value}"
-  source         = "${path.module}/../assets/code/${each.value}"
-  source_md5hash = filemd5("${path.module}/../assets/code/${each.value}")
+  source         = "${path.module}/../../../assets/code/${each.value}"
+  source_md5hash = filemd5("${path.module}/../../../assets/code/${each.value}")
 }

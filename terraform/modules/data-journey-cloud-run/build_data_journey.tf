@@ -15,7 +15,7 @@
 locals {
   artifact_repo        = var.artifact_repo
   image_name           = "open-lakehouse-demo-data-journey"
-  data_journey_fileset = fileset(path.module, "../../data-journey/**")
+  data_journey_fileset = fileset(path.module, "../../../data-journey/**")
   data_journey_content_hash = sha512(join("", [for f in
   local.data_journey_fileset : filesha512("${path.module}/${f}")]))
   image_name_and_tag = "${var.region}-docker.pkg.dev/${var.project_id}/${local.artifact_repo}/${local.image_name}:latest"

@@ -15,25 +15,25 @@
 # Grant the Dataproc Worker role to the default compute service account.
 # This is required for Dataproc Serverless jobs to run with the default compute SA.
 # Although in real-world scenario, we would use separate service account for compute SA, in this scenario, this would add alot of boilerplate code to our notebooks.
-# resource "google_project_iam_member" "extra_roles_for_compute_sa" {
-#   for_each = toset([
-#     "roles/dataproc.worker",
-#     "roles/iam.serviceAccountUser",
-#     "roles/iam.serviceAccountTokenCreator",
-#     "roles/managedkafka.client",
-#     "roles/iam.serviceAccountOpenIdTokenCreator",
-#     "roles/iam.workloadIdentityUser",
-#     "roles/dataproc.editor",
-#     "roles/storage.expressModeUserAccess",
-#     "roles/biglake.admin",
-#     "roles/storage.admin",
-#     "roles/logging.logWriter",
-#     "roles/serviceusage.serviceUsageConsumer"
-#   ])
-#   project = var.project_id
-#   role    = each.value
-#   member  = "serviceAccount:${data.google_project.project.number}-compute@developer.gserviceaccount.com"
-# }
+resource "google_project_iam_member" "extra_roles_for_compute_sa" {
+  for_each = toset([
+    "roles/dataproc.worker",
+    "roles/iam.serviceAccountUser",
+    "roles/iam.serviceAccountTokenCreator",
+    "roles/managedkafka.client",
+    "roles/iam.serviceAccountOpenIdTokenCreator",
+    "roles/iam.workloadIdentityUser",
+    "roles/dataproc.editor",
+    "roles/storage.expressModeUserAccess",
+    "roles/biglake.admin",
+    "roles/storage.admin",
+    "roles/logging.logWriter",
+    "roles/serviceusage.serviceUsageConsumer"
+  ])
+  project = var.project_id
+  role    = each.value
+  member  = "serviceAccount:${data.google_project.project.number}-compute@developer.gserviceaccount.com"
+}
 
 
 # resource "google_project_iam_member" "pubsub_sa_token_creator" {

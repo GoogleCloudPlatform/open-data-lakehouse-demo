@@ -620,6 +620,7 @@ def _(bucket, dataset):
         job_config=ridership_job_config,
     )
     ridership_extract_job.result()
+    #why
     return
 
 

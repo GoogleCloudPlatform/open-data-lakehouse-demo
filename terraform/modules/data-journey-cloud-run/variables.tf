@@ -77,3 +77,8 @@ variable "build_service_account" {
   description = "Build Service Account"
 }
 
+variable "spark_service_account" {
+  type        = string
+  description = "Spark Service Account"
+}
+  

@@ -24,9 +24,12 @@ with app.setup:
     GENERAL_BUCKET_NAME = os.environ.get("GENERAL_BUCKET_NAME", f"{PROJECT_ID}-ridership-lakehouse")
     STAGING_BQ_DATASET = os.environ.get("STAGING_BQ_DATASET", "ridership_lakehouse_staging")
     MAIN_BQ_DATASET = os.environ.get("MAIN_BQ_DATASET", "ridership_lakehouse")
-    BQ_CONNECTION_NAME = os.environ.get("BQ_CONNECTION_NAME", "cloud-resources-connection")
+    FULL_BQ_CONNECTION_NAME = os.environ.get("BQ_CONNECTION_NAME", "cloud-resources-connection")
     BQ_CATALOG_BUCKET_NAME = os.environ.get("BQ_CATALOG_BUCKET_NAME", f"{PROJECT_ID}-iceberg-bq-catalog")
     REST_CATALOG_BUCKET_NAME = os.environ.get("REST_CATALOG_BUCKET_NAME", f"{PROJECT_ID}-iceberg-rest-catalog")
+    BQ_CONNECTION_NAME = FULL_BQ_CONNECTION_NAME.split("/")[-1]
+    SUBNETWORK_ID = os.environ.get("SUBNETWORK_ID", f"projects/{PROJECT_ID}/regions/{LOCATION}/subnetworks/{LOCATION}-open-lakehouse-subnet")
+    SPARK_SERVICE_ACCOUNT = os.environ.get("SPARK_SERVICE_ACCOUNT", )
 
 
     BQ_CATALOG_PREFIX = "bq_namespace"
