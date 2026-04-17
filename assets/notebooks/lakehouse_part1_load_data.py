@@ -24,10 +24,10 @@
 #
 # If you created the demo, using our terraform scripts, you should be able to access the data files under the `<YOUR_PROJECT_ID>-ridership-lakehouse` bucket, as the terraform script copies over the data files from a publicly available bucket `gs://data-lakehouse-demo-data-assets/staged-data/`.
 #
-# If you haven't created this demo using our terraform scripts, the easiest way to get a hold of the data would be to run the following `gsutil` command:
+# If you haven't created this demo using our terraform scripts, the easiest way to get a hold of the data would be to run the following `gcloud storage` command:
 #
 # ```bash
-# gsutil -m rsync -r gs://data-lakehouse-demo-data-assets/  gs://<YOUR_BUCKET_NAME>/
+# gcloud storage rsync --recursive gs://data-lakehouse-demo-data-assets/  gs://<YOUR_BUCKET_NAME>/
 # ```
 #
 # All data in this notebook was prepared in the previous `part0` notebook.
