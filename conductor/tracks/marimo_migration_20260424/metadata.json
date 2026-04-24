@@ -1,0 +1,8 @@
+{
+  "track_id": "marimo_migration_20260424",
+  "type": "feature",
+  "status": "new",
+  "created_at": "2026-04-24T12:00:00Z",
+  "updated_at": "2026-04-24T12:00:00Z",
+  "description": "Migrate remaining Jupyter notebooks to Marimo notebooks"
+}
