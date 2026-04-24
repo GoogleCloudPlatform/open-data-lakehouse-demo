@@ -38,9 +38,12 @@ module "cloud_run_app" {
     BIGQUERY_TABLE            = "bus_state"
     SUBNET_URI                = var.subnetwork_id
     SERVICE_ACCOUNT           = var.spark_service_account_email
+    SOURCE_CONTENT_HASH       = local.webapp_content_hash
   }
 
   invoker_iam_members = ["allUsers"]
+
+  depends_on = [module.container_build]
 }
 
 moved {

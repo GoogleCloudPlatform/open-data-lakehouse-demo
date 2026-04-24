@@ -20,13 +20,23 @@
 
 locals {
   buses_dashboard_image_name = "buses-dashboard"
-  buses_dashboard_fileset    = fileset(path.module, "../../../buses-dashboard/**")
+  buses_dashboard_fileset = setunion(
+    fileset("${path.module}/../../../buses-dashboard", "src/**"),
+    fileset("${path.module}/../../../buses-dashboard", "public/**"),
+    fileset("${path.module}/../../../buses-dashboard", "Dockerfile"),
+    fileset("${path.module}/../../../buses-dashboard", "package.json"),
+    fileset("${path.module}/../../../buses-dashboard", "package-lock.json"),
+    fileset("${path.module}/../../../buses-dashboard", "tsconfig.json"),
+    fileset("${path.module}/../../../buses-dashboard", "next.config.ts"),
+    fileset("${path.module}/../../../buses-dashboard", "postcss.config.mjs"),
+    fileset("${path.module}/../../../buses-dashboard", "eslint.config.mjs")
+  )
   buses_dashboard_content_hash = sha512(
     join(
       "",
       [
         for f in local.buses_dashboard_fileset :
-        filesha512("${path.module}/${f}")
+        filesha512("${path.module}/../../../buses-dashboard/${f}")
       ]
     )
   )

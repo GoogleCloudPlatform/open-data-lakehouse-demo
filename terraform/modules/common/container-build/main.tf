@@ -12,10 +12,12 @@ resource "null_resource" "run_build_script" {
     command = var.build_script_path
 
     environment = merge({
-      PROJECT_ID      = var.project_id
-      REGION          = var.region
-      TAG             = var.image_name_and_tag
-      SERVICE_ACCOUNT = var.build_service_account
+      PROJECT_ID              = var.project_id
+      REGION                  = var.region
+      TAG                     = var.image_name_and_tag
+      SERVICE_ACCOUNT         = var.build_service_account
+      CLOUDSDK_CORE_PROJECT   = var.project_id
+      CLOUDSDK_BILLING_PROJECT = var.project_id
     }, var.extra_env_vars)
   }
 

@@ -15,9 +15,14 @@
 locals {
   artifact_repo        = var.artifact_repo
   image_name           = "open-lakehouse-demo-data-journey"
-  data_journey_fileset = fileset(path.module, "../../../data-journey/**")
+  data_journey_fileset = setunion(
+    fileset("${path.module}/../../../data-journey", "notebooks/**"),
+    fileset("${path.module}/../../../data-journey", "Dockerfile"),
+    fileset("${path.module}/../../../data-journey", "pyproject.toml"),
+    fileset("${path.module}/../../../data-journey", "uv.lock")
+  )
   data_journey_content_hash = sha512(join("", [for f in
-  local.data_journey_fileset : filesha512("${path.module}/${f}")]))
+  local.data_journey_fileset : filesha512("${path.module}/../../../data-journey/${f}")]))
   image_name_and_tag = "${var.region}-docker.pkg.dev/${var.project_id}/${local.artifact_repo}/${local.image_name}:latest"
 }
 
@@ -30,6 +35,7 @@ module "container_build" {
   build_service_account = var.build_service_account
   build_script_path     = "${path.module}/scripts/build-data-journey.sh"
   trigger_content_hash  = local.data_journey_content_hash
+  
 
   extra_env_vars = {
     DATA_JOURNEY_DIR = "${path.module}/../../../data-journey"

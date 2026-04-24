@@ -29,6 +29,11 @@ fi
 
 echo "WEBAPP_DIR=${WEBAPP_DIR}"
 echo "Building webapp image... (TAG=${TAG}; PROJECT_ID=${PROJECT_ID}; REGION=${REGION}; SERVICE_ACCOUNT=${SERVICE_ACCOUNT})"
+
+# Set the project
+gcloud config set project ${PROJECT_ID}
+gcloud config set billing/quota_project ${PROJECT_ID}
+
 gcloud builds submit ${WEBAPP_DIR} \
       --tag ${TAG} \
       --project ${PROJECT_ID} \

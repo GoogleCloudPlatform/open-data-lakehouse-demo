@@ -32,6 +32,7 @@ echo "Building webapp image... (TAG=${TAG}; PROJECT_ID=${PROJECT_ID}; REGION=${R
 
 # Set the project
 gcloud config set project ${PROJECT_ID}
+gcloud config set billing/quota_project ${PROJECT_ID}
 
 gcloud builds submit ${DATA_JOURNEY_DIR} \
       --tag ${TAG} \

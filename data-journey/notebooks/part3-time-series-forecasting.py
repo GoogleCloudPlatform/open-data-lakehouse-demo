@@ -3,9 +3,7 @@ import marimo
 __generated_with = "0.18.1"
 app = marimo.App()
 
-
-@app.cell
-def _():
+with app.setup:
     # Copyright 2025 Google LLC
     #
     # Licensed under the Apache License, Version 2.0 (the "License");
@@ -19,8 +17,8 @@ def _():
     # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
     # See the License for the specific language governing permissions and
     # limitations under the License.
-    return
-
+    
+    import marimo as mo
 
 @app.cell(hide_code=True)
 def _(mo):

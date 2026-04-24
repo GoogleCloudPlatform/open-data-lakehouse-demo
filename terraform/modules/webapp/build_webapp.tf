@@ -15,9 +15,17 @@
 locals {
   artifact_repo  = var.artifact_repo
   image_name     = "open-lakehouse-demo-webapp"
-  webapp_fileset = fileset(path.module, "../../../webapp/**")
+  webapp_fileset = setunion(
+    fileset("${path.module}/../../../webapp", "*.py"),
+    fileset("${path.module}/../../../webapp", "Dockerfile"),
+    fileset("${path.module}/../../../webapp", "pyproject.toml"),
+    fileset("${path.module}/../../../webapp", "uv.lock"),
+    fileset("${path.module}/../../../webapp", "package.json"),
+    fileset("${path.module}/../../../webapp", "package-lock.json"),
+    fileset("${path.module}/../../../webapp", "tailwind.config.js")
+  )
   webapp_content_hash = sha512(join("", [for f in
-  local.webapp_fileset : filesha512("${path.module}/${f}")]))
+  local.webapp_fileset : filesha512("${path.module}/../../../webapp/${f}")]))
   image_name_and_tag = "${var.region}-docker.pkg.dev/${var.project_id}/${local.artifact_repo}/${local.image_name}:latest"
 }
 
