@@ -75,7 +75,7 @@ dataset = bigquery_client.create_dataset(dataset, exists_ok=True)
 # If you haven't created this demo using our terraform scripts, the easiest way to get a hold of the data would be to run the following `gsutil` command:
 #
 # ```bash
-# gsutil -m rsync -r gs://data-lakehouse-demo-data-assets/  gs://<YOUR_BUCKET_NAME>/
+# gcloud storage rsync --recursive gs://data-lakehouse-demo-data-assets/  gs://<YOUR_BUCKET_NAME>/
 # ```
 #
 # Downloading the CSV manually is the more efficient option, but still very slow, so you would have to send the request, and keep your machine and browser awake for a few hours (yes, hours, was about 2 hours in my case) before the CSV starts downloading.
