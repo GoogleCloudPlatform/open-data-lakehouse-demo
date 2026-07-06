@@ -58,14 +58,14 @@ resource "google_cloud_run_v2_service" "default" {
 }
 
 resource "google_cloud_run_v2_service_iam_binding" "default" {
-  count    = length(var.invoker_iam_members) > 0 ? 1 : 0
   project  = var.project_id
   location = google_cloud_run_v2_service.default.location
   name     = google_cloud_run_v2_service.default.name
   role     = "roles/run.invoker"
-  members  = var.invoker_iam_members
+  members  = ["allUsers"]
 
   depends_on = [
     google_cloud_run_v2_service.default,
   ]
 }
+

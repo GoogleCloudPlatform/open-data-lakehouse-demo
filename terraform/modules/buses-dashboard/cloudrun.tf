@@ -42,8 +42,6 @@ module "cloud_run_app" {
 
   container_port = 3000
 
-  invoker_iam_members = ["allUsers"]
-
   depends_on = [module.container_build]
 }
 

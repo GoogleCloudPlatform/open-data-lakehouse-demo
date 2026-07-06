@@ -59,9 +59,3 @@ variable "ingress" {
   description = "Ingress traffic"
   default     = "INGRESS_TRAFFIC_ALL"
 }
-
-variable "invoker_iam_members" {
-  type        = list(string)
-  description = "IAM members to allow invoker access"
-  default     = ["allUsers"]
-}

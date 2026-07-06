@@ -81,4 +81,3 @@ variable "spark_service_account" {
   type        = string
   description = "Spark Service Account"
 }
-  

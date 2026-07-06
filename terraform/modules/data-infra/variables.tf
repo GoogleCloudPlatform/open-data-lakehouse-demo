@@ -28,6 +28,11 @@ variable "zone" {
   description = "GCP Zone"
 }
 
+variable "network_id" {
+  type        = string
+  description = "GCP Network ID"
+}
+
 variable "subnetwork_id" {
   type        = string
   description = "Subnetwork ID for Dataproc Serverless Spark execution"
@@ -38,7 +43,7 @@ variable "gcs_main_bucket" {
   description = "GCS Main Bucket"
 }
 
-variable "gcs_rest_catalog_bucket" {
+variable "gcs_iceberg_catalog_bucket" {
   type        = string
-  description = "GCS REST Catalog Bucket"
+  description = "GCS Iceberg Catalog Bucket"
 }

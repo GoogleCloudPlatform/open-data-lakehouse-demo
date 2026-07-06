@@ -3,10 +3,6 @@ resource "google_service_account" "cloud_build_account" {
   account_id   = "cloud-build"
   display_name = "Cloud Build Service Account"
   description  = "specific custom service account for Cloud Build"
-
-  depends_on = [
-    time_sleep.wait_for_services
-  ]
 }
 
 resource "google_project_iam_member" "cloud_build_roles" {

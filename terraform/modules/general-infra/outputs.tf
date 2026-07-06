@@ -37,11 +37,6 @@ output "cloud_build_sa_email" {
   value = google_service_account.cloud_build_account.email
 }
 
-output "rest_catalog_bucket_name" {
-  value = google_storage_bucket.iceberg_rest_catalog.name
+output "iceberg_lakehouse_catalog_bucket" {
+  value = google_storage_bucket.iceberg_lakehouse_catalog_bucket.name
 }
-
-output "bq_catalog_bucket_name" {
-  value = google_storage_bucket.iceberg_bq_catalog.name
-}
-

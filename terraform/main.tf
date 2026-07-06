@@ -26,13 +26,14 @@ module "general_infra" {
 }
 
 module "data_infra" {
-  source                  = "./modules/data-infra"
-  project_id              = var.project_id
-  region                  = var.region
-  zone                    = var.zone
-  subnetwork_id           = module.general_infra.subnetwork_id
-  gcs_main_bucket         = module.general_infra.gcs_main_bucket
-  gcs_rest_catalog_bucket = module.general_infra.rest_catalog_bucket_name
+  source                     = "./modules/data-infra"
+  project_id                 = var.project_id
+  region                     = var.region
+  zone                       = var.zone
+  subnetwork_id              = module.general_infra.subnetwork_id
+  gcs_main_bucket            = module.general_infra.gcs_main_bucket
+  gcs_iceberg_catalog_bucket = module.general_infra.iceberg_lakehouse_catalog_bucket
+  network_id                 = module.general_infra.network_id
 }
 
 module "webapp" {
@@ -61,11 +62,11 @@ module "data_journey" {
   zone                     = var.zone
   subnetwork_id            = module.general_infra.subnetwork_id
   network_id               = module.general_infra.network_id
-  bq_catalog_bucket_name   = module.general_infra.bq_catalog_bucket_name
+  bq_catalog_bucket_name   = module.general_infra.iceberg_lakehouse_catalog_bucket
   bq_connection_name       = module.data_infra.bq_connection_name
   bq_dataset_id            = module.data_infra.bq_dataset_id
   gcs_main_bucket          = module.general_infra.gcs_main_bucket
-  rest_catalog_bucket_name = module.general_infra.rest_catalog_bucket_name
+  rest_catalog_bucket_name = module.general_infra.iceberg_lakehouse_catalog_bucket
   staging_bq_dataset       = module.data_infra.staging_bq_dataset
   build_service_account    = module.general_infra.cloud_build_sa_email
   spark_service_account    = module.data_infra.backend_service_account_email

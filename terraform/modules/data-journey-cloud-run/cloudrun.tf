@@ -36,7 +36,7 @@ module "cloud_run_app" {
     REST_CATALOG_BUCKET_NAME = var.rest_catalog_bucket_name
     SUBNETWORK_ID            = var.subnetwork_id
     SPARK_SERVICE_ACCOUNT    = var.spark_service_account
-    SOURCE_CONTENT_HASH       = local.data_journey_content_hash
+    SOURCE_CONTENT_HASH      = local.data_journey_content_hash
   }
 
   limits = {
@@ -44,8 +44,7 @@ module "cloud_run_app" {
     memory = "4Gi"
   }
 
-  depends_on = [ module.container_build ]
-  invoker_iam_members = ["allUsers"]
+  depends_on = [module.container_build]
 }
 
 moved {

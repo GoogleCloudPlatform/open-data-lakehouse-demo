@@ -31,26 +31,8 @@ resource "google_storage_bucket" "data_lakehouse_bucket" {
   }
 }
 
-resource "google_storage_bucket" "iceberg_bq_catalog" {
-  name          = "${var.project_id}-iceberg-bq-catalog"
-  location      = var.region
-  force_destroy = true
-  project       = var.project_id
-
-  uniform_bucket_level_access = true
-
-  lifecycle_rule {
-    action {
-      type = "Delete"
-    }
-    condition {
-      age = 365
-    }
-  }
-}
-
-resource "google_storage_bucket" "iceberg_rest_catalog" {
-  name          = "${var.project_id}-iceberg-rest-catalog"
+resource "google_storage_bucket" "iceberg_lakehouse_catalog_bucket" {
+  name          = "${var.project_id}-iceberg-lakehouse-catalog"
   location      = var.region
   force_destroy = true
   project       = var.project_id
