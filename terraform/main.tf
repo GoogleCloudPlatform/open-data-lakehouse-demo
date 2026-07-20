@@ -54,6 +54,28 @@ module "webapp" {
   spark_tmp_bucket            = module.general_infra.spark_bucket
 }
 
+module "web_demo" {
+  source = "./modules/web-demo"
+
+  artifact_repo               = module.general_infra.artifact_repo
+  bq_dataset_id               = module.data_infra.bq_dataset_id
+  bq_staging_dataset_id       = module.data_infra.staging_bq_dataset
+  build_service_account       = module.general_infra.cloud_build_sa_email
+  full_bq_connection_name     = module.data_infra.bq_connection_name
+  gcs_main_bucket             = module.general_infra.gcs_main_bucket
+  iceberg_catalog_bucket_name = module.general_infra.iceberg_lakehouse_catalog_bucket
+  kafka_alert_topic           = module.data_infra.kafka_alert_topic
+  kafka_bootstrap             = module.data_infra.kafka_bootstrap
+  kafka_topic                 = module.data_infra.kafka_topic
+  network_id                  = module.general_infra.network_id
+  project_id                  = var.project_id
+  region                      = var.region
+  spark_service_account_email = module.data_infra.backend_service_account_email
+  spark_tmp_bucket            = module.general_infra.spark_bucket
+  subnetwork_id               = module.general_infra.subnetwork_id
+  zone                        = var.zone
+}
+
 module "data_journey" {
   source                   = "./modules/data-journey-cloud-run"
   artifact_repo            = module.general_infra.artifact_repo

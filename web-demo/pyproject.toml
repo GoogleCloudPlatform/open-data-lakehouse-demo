@@ -1,0 +1,23 @@
+[project]
+name = "st-open-data-lakehouse-demo"
+version = "0.1.0"
+requires-python = ">=3.14"
+dependencies = [
+    "db-dtypes>=1.7.0",
+    "google-cloud-bigquery>=3.42.1",
+    "google-cloud-storage>=3.12.0",
+    "pandas>=2.2.0",
+    "pdf2image>=1.17.0",
+    "plotly>=6.8.0",
+    "pyyaml>=6.0.3",
+    "requests>=2.34.2",
+    "sodapy>=2.2.0",
+    "streamlit>=1.58.0",
+    "streamlit-arborist>=0.4.0",
+]
+
+[[tool.uv.index]]
+name = "pypi"
+url = "https://pypi.org/simple"
+default = true
+

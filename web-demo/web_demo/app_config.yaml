@@ -1,0 +1,13 @@
+project_id: open-data-lakehouse-demo-1001
+location: us-central1
+gcs_bucket_name: open-data-lakehouse-demo-1001-ridership-lakehouse
+full_bq_connection_name: projects/549019528094/locations/us-central1/connections/cloud-resources-connection
+iceberg_catalog_bucket_name: open-data-lakehouse-demo-1001-iceberg-lakehouse-catalog
+subnetwork_id: projects/open-data-lakehouse-demo-1001/regions/us-central1/subnetworks/us-central1-open-lakehouse-subnet
+spark_service_account: backend-service-account@open-data-lakehouse-demo-1001.iam.gserviceaccount.com
+staging_bq_dataset: ridership_lakehouse_staging
+main_bq_dataset: ridership_lakehouse
+kafka_bootstrap: bootstrap.kafka-cluster.us-central1.managedkafka.open-data-lakehouse-demo-1001.cloud.goog:9092
+kafka_topic: bus-updates
+kafka_alert_topic: capacity-alerts
+spark_tmp_bucket: open-data-lakehouse-demo-1001-dataproc-serverless

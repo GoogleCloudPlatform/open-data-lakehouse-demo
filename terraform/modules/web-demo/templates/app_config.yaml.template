@@ -1,0 +1,13 @@
+project_id: ${project_id}
+location: ${location}
+gcs_bucket_name: ${gcs_bucket_name}
+full_bq_connection_name: ${full_bq_connection_name}
+iceberg_catalog_bucket_name: ${iceberg_catalog_bucket_name}
+subnetwork_id: ${subnetwork_id}
+spark_service_account: ${spark_service_account}
+staging_bq_dataset: ${staging_bq_dataset}
+main_bq_dataset: ${main_bq_dataset}
+kafka_bootstrap: ${kafka_bootstrap}
+kafka_topic: ${kafka_topic}
+kafka_alert_topic: ${kafka_alert_topic}
+spark_tmp_bucket: ${spark_tmp_bucket}
