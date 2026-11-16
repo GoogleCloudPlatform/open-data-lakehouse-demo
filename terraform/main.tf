@@ -43,19 +43,9 @@ module "project_services" {
     {
       "api" : "cloudbuild.googleapis.com",
       "roles" : [
-        "roles/run.admin",
-        # Required for Cloud Run to launch as the normal compute service account
-        "roles/iam.serviceAccountUser",
+        "roles/run.developer",
       ]
     },
-    {
-      "api" : "pubsub.googleapis.com",
-      # PubSub publish to Cloud Run
-      "roles" : [
-        #"roles/iam.serviceAccountUser",
-        "roles/iam.serviceAccountTokenCreator",
-      ],
-    }
   ]
 }
 

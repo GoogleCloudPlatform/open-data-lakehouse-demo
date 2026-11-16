@@ -35,13 +35,19 @@ module "cloud_build_account" {
   names      = ["cloud-build"]
   project_roles = [
     "${var.project_id}=>roles/logging.logWriter",
-    "${var.project_id}=>roles/storage.admin",
+    "${var.project_id}=>roles/storage.objectAdmin",
     "${var.project_id}=>roles/artifactregistry.writer",
     "${var.project_id}=>roles/run.developer",
-    "${var.project_id}=>roles/iam.serviceAccountUser",
   ]
   display_name = "Cloud Build Service Account"
   description  = "specific custom service account for Cloud Build"
+}
+
+# Grant actAs only on the Cloud Run runtime SA, not project-wide across every SA.
+resource "google_service_account_iam_member" "cloud_build_actas_cloudrun" {
+  service_account_id = google_service_account.cloudrun_sa.name
+  role               = "roles/iam.serviceAccountUser"
+  member             = "serviceAccount:${module.cloud_build_account.email}"
 }
 
 # Propagation time for change of access policy typically takes 2 minutes
@@ -51,7 +57,8 @@ module "cloud_build_account" {
 resource "time_sleep" "wait_for_policy_propagation" {
   create_duration = "120s"
   depends_on = [
-    module.cloud_build_account
+    module.cloud_build_account,
+    google_service_account_iam_member.cloud_build_actas_cloudrun,
   ]
 }
 

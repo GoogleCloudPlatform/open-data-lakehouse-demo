@@ -72,7 +72,7 @@ dataset = bigquery_client.create_dataset(dataset, exists_ok=True)
 #
 # If you created the demo, using our terraform scripts, you should be able to access the MTA raw CSV under the bucket `<YOUR_PROJECT_ID>-ridership-lakehouse`, as the terraform script copies over the CSV from a publicly available bucket `gs://data-lakehouse-demo-data-assets/mta-raw/`.
 #
-# If you haven't created this demo using our terraform scripts, the easiest way to get a hold of the data would be to run the following `gsutil` command:
+# If you haven't created this demo using our terraform scripts, the easiest way to get a hold of the data would be to run the following `gcloud storage` command:
 #
 # ```bash
 # gcloud storage rsync --recursive gs://data-lakehouse-demo-data-assets/  gs://<YOUR_BUCKET_NAME>/
