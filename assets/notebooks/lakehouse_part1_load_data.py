@@ -27,7 +27,7 @@
 # If you haven't created this demo using our terraform scripts, the easiest way to get a hold of the data would be to run the following `gcloud storage` command:
 #
 # ```bash
-# gcloud storage rsync --recursive gs://data-lakehouse-demo-data-assets/  gs://<YOUR_BUCKET_NAME>/
+# gcloud storage rsync --recursive gs://data-lakehouse-demo-data-assets/ gs://<YOUR_BUCKET_NAME>/
 # ```
 #
 # All data in this notebook was prepared in the previous `part0` notebook.

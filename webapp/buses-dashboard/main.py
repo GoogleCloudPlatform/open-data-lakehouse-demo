@@ -14,9 +14,10 @@
 
 import logging
 import os
+import secrets
 import threading  # Used to manage the stop signal for the background task
 
-from flask import Flask, render_template, jsonify
+from flask import Flask, render_template, jsonify, request, abort
 from flask_executor import Executor
 
 from bq_service import BigQueryService
@@ -38,8 +39,24 @@ SPARK_CHECKPOINT_LOCATION = os.environ["SPARK_CHECKPOINT_LOCATION"]
 BIGQUERY_TABLE = os.environ["BIGQUERY_TABLE"]
 SUBNET_URI = os.environ["SUBNET_URI"]
 SERVICE_ACCOUNT = os.environ["SERVICE_ACCOUNT"]
+# Shared secret required on all state-changing endpoints. The Cloud Run service
+# is deployed with allUsers invoker so the read-only dashboard is public; the
+# start/stop simulation endpoints must not be. Set via Secret Manager.
+ADMIN_TOKEN = os.environ.get("ADMIN_TOKEN")
 app = Flask(__name__, template_folder=templates_dir)
 executor = Executor(app)
+
+
+def _require_admin():
+    """Reject the request with 401 unless it carries the configured bearer token.
+
+    Fails closed: if ADMIN_TOKEN is unset the admin endpoints are disabled.
+    """
+    supplied = request.headers.get("Authorization", "")
+    if not ADMIN_TOKEN or not secrets.compare_digest(
+        supplied, f"Bearer {ADMIN_TOKEN}"
+    ):
+        abort(401)
 
 app.config["bq_client"] = BigQueryService(BQ_DATASET)
 
@@ -122,6 +139,7 @@ def kafka_status():
 
 @app.route("/start_spark_simulation", methods=["POST"])
 def start_spark_simulation():
+    _require_admin()
     global spark_service
     if spark_service.status.is_running:
         logging.info("Spark streaming app is already running.")
@@ -140,6 +158,7 @@ def start_spark_simulation():
 
 @app.route("/start_kafka_simulation", methods=["POST"])
 def start_kafka_simulation():
+    _require_admin()
     if app.config[KAFKA_TASK_ID_KEY] is not None and not executor.futures.done(
         app.config[KAFKA_TASK_ID_KEY]
     ):
@@ -160,6 +179,7 @@ def start_kafka_simulation():
 
 @app.route("/stop_spark_simulation", methods=["POST"])
 def stop_spark_simulation():
+    _require_admin()
     global spark_service
     stop_status = spark_service.cancel_job()
     if app.config[SPARK_EVENT_KEY]:
@@ -172,6 +192,7 @@ def stop_spark_simulation():
 
 @app.route("/stop_kafka_simulation", methods=["POST"])
 def stop_kafka_simulation():
+    _require_admin()
     if app.config[KAFKA_EVENT_KEY]:
         app.config[KAFKA_EVENT_KEY].set()
     if app.config[KAFKA_TASK_ID_KEY]:

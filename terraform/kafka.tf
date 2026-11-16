@@ -96,7 +96,7 @@ resource "google_managed_kafka_connect_cluster" "default" {
         primary_subnet = google_compute_subnetwork.open-lakehouse-subnetwork.id
         # additional_subnets = ["${google_compute_subnetwork.mkc_secondary_subnet.id}"]
         dns_domain_names = [
-          "${google_managed_kafka_cluster.default.cluster_id}.us-central1.managedkafka.${var.project_id}.cloud.goog"
+          "${google_managed_kafka_cluster.default.cluster_id}.${var.region}.managedkafka.${var.project_id}.cloud.goog"
         ]
       }
     }
