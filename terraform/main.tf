@@ -14,8 +14,8 @@
 
 
 module "project_services" {
-  source = "github.com/terraform-google-modules/terraform-google-project-factory.git//modules/project_services?ref=ff00ab5032e7f520eb3961f133966c6ced4fd5ee"
-  # commit hash of version 17.0.0
+  source                      = "terraform-google-modules/project-factory/google//modules/project_services"
+  version                     = "~> 18.0"
   project_id                  = var.project_id
   disable_services_on_destroy = false
   disable_dependent_services  = false
@@ -29,21 +29,32 @@ module "project_services" {
     "aiplatform.googleapis.com",
     "dataform.googleapis.com",
     "dataproc.googleapis.com",
+    "bigquery.googleapis.com",
     "bigqueryconnection.googleapis.com",
     "bigquerystorage.googleapis.com",
     "biglake.googleapis.com",
+    "dataplex.googleapis.com",
+    "datalineage.googleapis.com",
     "iam.googleapis.com",
     "logging.googleapis.com",
     "vpcaccess.googleapis.com",
     "servicenetworking.googleapis.com",
   ]
 
-  # Provide more access to the cloudbuild service account
+  # Provision service identities and bind required roles before downstream resources.
   activate_api_identities = [
     {
       "api" : "cloudbuild.googleapis.com",
       "roles" : [
         "roles/run.developer",
+      ]
+    },
+    {
+      "api" : "dataplex.googleapis.com",
+      "roles" : [
+        "roles/bigquery.dataViewer",
+        "roles/bigquery.jobUser",
+        "roles/biglake.viewer",
       ]
     },
   ]

@@ -158,7 +158,7 @@ class PySparkService:
         except exceptions.InternalServerError:
             self.__status__ = JobStatus(
                 status=PySparkState.INTERNAL_SERVER_ERROR,
-                message="Internal server error from Dataproc API.",
+                message="Internal server error from Serverless for Apache Spark (Dataproc API).",
             )
         except Exception as e:
             self.__status__ = JobStatus(

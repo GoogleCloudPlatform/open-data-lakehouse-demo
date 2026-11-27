@@ -18,27 +18,27 @@
 #
 # This notebook will demonstrate a strategy to implement an open lakehouse on GCP, using Apache Iceberg,
 # as an open source standard for managing data, while still leveraging GCP native capabilities. This demo will use
-# BigQuery Managed Iceberg Tables, Managed Apache Kafka and Apache Kafka Connect to ingest streaming data, Vertex AI for Generative AI queries on top of the data and Dataplex to govern tables.
+# BigQuery Managed Iceberg Tables, the Lakehouse Runtime Catalog (Apache Iceberg REST Catalog with Credential Vending), Serverless for Apache Spark (with Lightning Engine), Managed Service for Apache Kafka and Apache Kafka Connect to ingest streaming data, BigQuery AI (`AI.FORECAST` powered by TimesFM) for forecasting, and Knowledge Catalog to govern tables, lineage, and data quality.
 #
-# This notebook will process the data to simulate bus rides. The original datasets describes `ridership` as passengers in bus stations. We created bus lines, but not the rides. This will be the goal of this notebook. We accomplish this using **Google's Cloud Serverless Apache Spark**.
+# This notebook will process the data to simulate bus rides. The original dataset describes `ridership` as passengers in bus stations. We created bus lines, but not the rides. This will be the goal of this notebook. We accomplish this using **Serverless for Apache Spark** (with **Lightning Engine**).
 #
 # The processing will simulate `bus ridership` data, based on `bus station ridership` data. The `bus station ridership` shows passengers waiting at a given station at a given timestamp. Our PySpark processing pipelines will use Pandas UDFs, simulating a bus picking up those passengers while driving its route. The routes for the buses are taken from the pre-made `bus_lines` table.
 #
 # All data in this notebook was prepared in the previous `part0` notebook, and loaded in `part1` notebook.
 #
-# **Note about Iceberg catalogs, and how spark can use them:**
+# **Note about Iceberg catalogs, and how Spark can use them:**
 #
-# In part 1, we loaded tables to bigquery in Iceberg format. To do so, we used 2 different kind of tables: 1) Managed Iceberg tables for BigQuery & 2) External Iceberg Tables for BigQuery.
+# In Part 1, we loaded tables in Apache Iceberg format using two table patterns: 1) **BigQuery Managed Iceberg Tables** (*Lakehouse for Apache Iceberg*) & 2) **Lakehouse Runtime Catalog** tables (Apache Iceberg REST Catalog with **Credential Vending**, exposed in BigQuery via 4-part `P.C.N.T` syntax and a live View).
 #
-# The main difference between them is that the managed tables are read-write for BigQuery, and read-only for spark (and other external engines) while the reverse is true for external tables.
+# The main difference between them is that the managed tables are read-write for BigQuery and read-only for Spark (and other external engines), while Lakehouse Runtime Catalog tables are managed by external engines like Spark and read dynamically by BigQuery.
 #
-# How to choose? If your main workloads are in BigQuery, and your datasets are created by BigQuery, use the managed tables, as BigQuery retains control on how tables are created, managed clustered etc. If your main workloads are in external engines, and are being written down to GCS by external tools like spark, use the external tables to mount the iceberg tables in BigQuery to make them readable by BigQuery to enable computation on that data.
+# How to choose? If your main workloads are in BigQuery, and your datasets are created by BigQuery, use the managed tables, as BigQuery retains control over clustering, compaction, and lifecycle. If your main workloads are in external engines like Spark, register them in the **Lakehouse Runtime Catalog** so BigQuery can query the latest committed snapshot via 4-part `P.C.N.T` syntax with least-privilege **Credential Vending**.
 #
-# In order to read both types of tables, spark needs to access the metadata and the data itself - and it can do so in 2 ways:
+# In order to read both types of tables, Spark needs to access the metadata and the data itself — and it can do so in 2 ways:
 #
-# 1) access the data through BigQuery: This method is no different from reading BigQuery native tables, using the [Spark-BigQuery-Connector](https://github.com/GoogleCloudDataproc/spark-bigquery-connector), which is already preloaded in GCP environments (Like Colab Enterprise). This means that spark will access both metadata and data, simply by accessing the BigQuery API, and use BigQuery compute slots in order to retrieve this data. **Pros:** access any data, regardless of storage, in the same way. **Cons:** uses BigQuery slots, hence effects costs differently.
+# 1) Access the data through BigQuery: This method is no different from reading BigQuery native tables, using the [Spark-BigQuery-Connector](https://github.com/GoogleCloudDataproc/spark-bigquery-connector), which is already preloaded in **BigQuery Studio Notebooks**. This means Spark accesses both metadata and data via the BigQuery Storage API using BigQuery compute slots. **Pros:** access any data, regardless of storage, in the same way. **Cons:** uses BigQuery slots, affecting costs differently.
 #
-# 2) access the data through metadata on GCS: This method is the standard way to read Iceberg data, regardless of where it is stored - this means that we need to configure a catalog for spark, and tell it where the tables are stored in the iceberg format. Spark, using the `iceberg` libraries, will scan the catalogs for tables data and metadata. If the catalog was written by Spark, and is just accessible to BigQuery by external tables, we should be able to access the data the same way we have written it before, using the same catalog. If the data is managed by BigQuery, we just need to make sure to expose the up-to-date metadata to spark, which means **exporting the metadata** to GCS, before starting the spark process. **Pros:** Not using BigQuery slots, keeps your processing pipelines consistent and costs to a minimum for data access. **Cons:** just more configuration.
+# 2) Access the data through Iceberg metadata on GCS: This is the standard open-table way to read Iceberg data regardless of engine — configure an Iceberg catalog for Spark so `iceberg` libraries scan metadata and read Parquet files directly from GCS (using short-lived vended tokens for the Lakehouse Runtime Catalog). For BigQuery Managed Iceberg tables, run `EXPORT TABLE METADATA` first so the latest snapshot metadata is published to GCS. **Pros:** zero BigQuery slots consumed for reads, portable across engines. **Cons:** explicit catalog configuration.
 #
 # In this notebook, we will access data in all different ways. We will configure the **external** catalog that was used in notebook 1 to write the `bus_lines` external table. We will configure the **BigQuery catalog** to read the `ridership` managed table. And we will read the `bus_stations` table directly through BigQuery, using BigQuery slots to do so.
 #
@@ -49,8 +49,6 @@
 # ## Setup environment
 
 # %%
-USER_AGENT = "cloud-solutions/data-to-ai-nb-v3"
-
 # PROJECT_ID = !gcloud config get-value project
 PROJECT_ID = PROJECT_ID[0]
 
@@ -68,20 +66,17 @@ REST_CATALOG_PREFIX = "rest_namespace"
 
 print(PROJECT_ID)
 
-from google.api_core.client_info import ClientInfo
+# %%
+# !pip install google-cloud-dataplex google-cloud-datacatalog-lineage --quiet
 
 # %%
 from google.cloud import bigquery, storage
 
 # we will use the storage client only for demonstration purposes
-storage_client = storage.Client(
-    project=PROJECT_ID, client_info=ClientInfo(user_agent=USER_AGENT)
-)
+storage_client = storage.Client(project=PROJECT_ID)
 
 # we will use the bigquery client to prepare an empty table, backed by apache iceberg parquet format.
-bigquery_client = bigquery.Client(
-    project=PROJECT_ID, location=LOCATION, client_info=ClientInfo(user_agent=USER_AGENT)
-)
+bigquery_client = bigquery.Client(project=PROJECT_ID, location=LOCATION)
 
 # %%
 # Some helper functions
@@ -126,16 +121,30 @@ import pyspark.sql.types as t
 from pyspark.sql import Row
 
 # %%
+import sys
 from google.cloud.dataproc_spark_connect import DataprocSparkSession
 from google.cloud.dataproc_v1 import Session
 
 session = Session()
 
+# Match the Serverless for Apache Spark runtime Python version to the notebook kernel
+# so Python UDFs and applyInPandas avoid PYTHON_VERSION_MISMATCH errors
+# (Runtime 4.0 = Python 3.13, Runtime 3.0 = Python 3.12, Runtime 2.3 = Python 3.11).
+_py_minor = sys.version_info[:2]
+session.runtime_config.version = (
+    "4.0" if _py_minor >= (3, 13) else "3.0" if _py_minor == (3, 12) else "2.3"
+)
+print(
+    f"Using Serverless Spark runtime {session.runtime_config.version} "
+    f"for Python {_py_minor[0]}.{_py_minor[1]}"
+)
+
 
 external_catalog = "external_catalog"
 bq_catalog = "bq_catalog"
 
-# here, we're setting the options for the external catalog, where the tables are managed by spark, and read-only for bq
+# Configure the Lakehouse Runtime Catalog (Apache Iceberg REST Catalog) with Credential Vending.
+# Tables here are managed by Spark and read dynamically by BigQuery via 4-part P.C.N.T syntax.
 session.runtime_config.properties[
     f"spark.sql.catalog.{external_catalog}"
 ] = "org.apache.iceberg.spark.SparkCatalog"
@@ -150,6 +159,12 @@ session.runtime_config.properties[
     f"spark.sql.catalog.{external_catalog}.header.x-goog-user-project"
 ] = PROJECT_ID
 session.runtime_config.properties[
+    f"spark.sql.catalog.{external_catalog}.header.X-Iceberg-Access-Delegation"
+] = "vended-credentials"
+session.runtime_config.properties[
+    f"spark.sql.catalog.{external_catalog}.gcs.oauth2.refresh-credentials-endpoint"
+] = "https://oauth2.googleapis.com/token"
+session.runtime_config.properties[
     f"spark.sql.catalog.{external_catalog}.rest.auth.type"
 ] = "org.apache.iceberg.gcp.auth.GoogleAuthManager"
 session.runtime_config.properties[
@@ -159,7 +174,7 @@ session.runtime_config.properties[
     f"spark.sql.catalog.{external_catalog}.rest-metrics-reporting-enabled"
 ] = "false"
 
-# here, we're setting the options for the bigquery catalog, where the tables are managed by bigquery, and read-only for spark
+# Configure the BigQuery catalog, where tables are managed by BigQuery and read-only for Spark.
 session.runtime_config.properties[
     f"spark.sql.catalog.{bq_catalog}"
 ] = "org.apache.iceberg.spark.SparkCatalog"
@@ -176,16 +191,20 @@ session.runtime_config.properties[
     f"spark.sql.catalog.{bq_catalog}.warehouse"
 ] = f"gs://{BQ_CATALOG_BUCKET_NAME}"
 
-# general packages and configuration
-session.runtime_config.properties[
-    "spark.jars.packages"
-] = "org.apache.iceberg:iceberg-spark-runtime-3.5_2.12:1.10.0,org.apache.iceberg:iceberg-gcp-bundle:1.10.0"
-session.runtime_config.properties[
-    "spark.jars"
-] = "https://storage.googleapis.com/spark-lib/bigquery/spark-bigquery-with-dependencies_2.12-0.42.1.jar"
+# Rely on Serverless for Apache Spark's pre-bundled Iceberg and BigQuery connectors
+# (matching Part 1). Avoid pinning Spark 3.5 / Scala 2.12 JARs, which collide with
+# Runtime 2.3/3.0 (Scala 2.13) and break BigQueryRelationProvider instantiation.
 session.runtime_config.properties[
     "spark.sql.extensions"
 ] = "org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions"
+
+# Native Serverless for Apache Spark OpenLineage -> Knowledge Catalog.
+# Do not manually set spark.extraListeners here; spark.dataproc.lineage.enabled
+# automatically injects the OpenLineage listener and gcplineage transport.
+session.runtime_config.properties["spark.dataproc.lineage.enabled"] = "true"
+session.runtime_config.properties[
+    "spark.openlineage.namespace"
+] = "ridership_lakehouse_demo"
 
 # Create the Spark session. This will take some time.
 spark = (
@@ -197,9 +216,9 @@ spark.conf.set("viewsEnabled", "true")
 
 # %% [markdown]
 # ## Let's take a look around
-# We've created a spark session, with a couple of interesting connections. We're running a spark session with the spark-bigquery-connector, which gives us access to all BigQuery tables and Views, and also configured Iceberg catalogs (the one managed by BigLake, and the REST for managing external tables)
+# We've created a **Serverless for Apache Spark** session with three catalog paths: `spark_catalog` (via the `spark-bigquery-connector` for BigQuery tables and views), `bq_catalog` (direct GCS Iceberg metadata reads for BigQuery Managed Iceberg tables), and `external_catalog` (**Lakehouse Runtime Catalog** with **Credential Vending**).
 #
-# Let's take a quick look at the **catalogs** - each containig **namespses** (also known as databases) and each namespace has **tables**. And compare the access patterns,
+# Let's inspect the **catalogs** — each containing **namespaces** (databases) and **tables** — and compare the access patterns.
 
 # %%
 # This is the default catalog, named `spark_catalog`, we can see the managed tables we have in BigQuery
@@ -212,7 +231,7 @@ spark.sql(
 ).toPandas()
 
 # %%
-# And compare that with the bus_stations table that our BigLake catalog sees
+# And compare that with the bus_stations table visible via the BigQuery Iceberg catalog
 spark.sql(f"DESCRIBE TABLE EXTENDED {bq_catalog}.{BQ_DATASET}.bus_stations;").toPandas()
 
 # %% [markdown]
@@ -625,14 +644,255 @@ bigquery_client.query(query).result()
 display_blobs_with_prefix(BQ_CATALOG_BUCKET_NAME, bus_rides_prefix)
 
 # %%
-# save the bus_rides_with_riders_and_totals dataframe to bigquery, with iceberg format
-bus_rides_with_riders_and_totals.write.format("bigquery").mode("overwrite").option(
-    "table", f"{PROJECT_ID}.{BQ_DATASET}.{TABLE_NAME}"
-).save()
+# Stage simulated bus rides as Parquet in GCS and load into the BigQuery Managed
+# Iceberg table via a LoadJob (matching Part 1). This avoids Spark 4.x StringType(UTF8_BINARY)
+# collation errors in spark-bigquery-connector's direct writer while preserving
+# end-to-end Knowledge Catalog lineage (Spark -> GCS staging -> BigQuery LoadJob -> bus_rides).
+staging_uri = f"gs://{PROJECT_ID}-dataproc-serverless/staging/{TABLE_NAME}"
+bus_rides_with_riders_and_totals.write.mode("overwrite").parquet(staging_uri)
 
+# BigQuery Managed Iceberg tables do not support WRITE_TRUNCATE load jobs; clear rows first.
+bigquery_client.query(f"DELETE FROM {BQ_DATASET}.{TABLE_NAME} WHERE TRUE").result()
+
+load_job = bigquery_client.load_table_from_uri(
+    f"{staging_uri}/*.parquet",
+    f"{PROJECT_ID}.{BQ_DATASET}.{TABLE_NAME}",
+    job_config=bigquery.LoadJobConfig(
+        write_disposition=bigquery.WriteDisposition.WRITE_APPEND,
+        source_format=bigquery.SourceFormat.PARQUET,
+    ),
+)
+load_job.result()
+
+# Export updated Iceberg metadata snapshot to GCS for external query engines
+bigquery_client.query(f"EXPORT TABLE METADATA FROM {BQ_DATASET}.{TABLE_NAME}").result()
+
+# Stop the Spark session cleanly and flush final OpenLineage COMPLETE events
+spark.stop()
 
 # %%
 display_blobs_with_prefix(BQ_CATALOG_BUCKET_NAME, bus_rides_prefix)
 
 # %%
 select_top_rows(TABLE_NAME)
+
+# %% [markdown]
+# ## Governance, Lineage & Data Quality (Knowledge Catalog)
+#
+# Now that `bus_rides` is populated as a BigQuery Managed Iceberg table, we validate it end to end in **Knowledge Catalog**:
+# 1. Run an automated **Data Quality scan** (`bus-rides-dq-scan`) and export results to `ridership_lakehouse.bus_rides_dq_results`.
+# 2. Query recorded **OpenLineage** links tracing `ridership`, `bus_lines`, and `bus_stations` through Serverless for Apache Spark (`simulate-bus-rides`) into `bus_rides`.
+
+# %%
+import time
+from google.api_core import exceptions as api_exceptions
+from google.cloud import dataplex_v1
+from google.protobuf import field_mask_pb2
+
+datascan_client = dataplex_v1.DataScanServiceClient()
+
+DQ_SCAN_ID = "bus-rides-dq-scan"
+dq_parent = f"projects/{PROJECT_ID}/locations/{LOCATION}"
+dq_scan_name = f"{dq_parent}/dataScans/{DQ_SCAN_ID}"
+dq_results_table = (
+    f"//bigquery.googleapis.com/projects/{PROJECT_ID}"
+    f"/datasets/{BQ_DATASET}/tables/bus_rides_dq_results"
+)
+
+dq_rules = [
+    dataplex_v1.DataQualityRule(
+        name="bus-ride-id-not-null",
+        column="bus_ride_id",
+        dimension="COMPLETENESS",
+        threshold=1.0,
+        non_null_expectation=dataplex_v1.DataQualityRule.NonNullExpectation(),
+    ),
+    dataplex_v1.DataQualityRule(
+        name="bus-line-id-not-null",
+        column="bus_line_id",
+        dimension="COMPLETENESS",
+        threshold=1.0,
+        non_null_expectation=dataplex_v1.DataQualityRule.NonNullExpectation(),
+    ),
+    dataplex_v1.DataQualityRule(
+        name="bus-stop-id-not-null",
+        column="bus_stop_id",
+        dimension="COMPLETENESS",
+        threshold=1.0,
+        non_null_expectation=dataplex_v1.DataQualityRule.NonNullExpectation(),
+    ),
+    dataplex_v1.DataQualityRule(
+        name="timestamp-at-stop-not-null",
+        column="timestamp_at_stop",
+        dimension="COMPLETENESS",
+        threshold=1.0,
+        non_null_expectation=dataplex_v1.DataQualityRule.NonNullExpectation(),
+    ),
+    dataplex_v1.DataQualityRule(
+        name="remaining-at-stop-non-negative",
+        column="remaining_at_stop",
+        dimension="VALIDITY",
+        threshold=1.0,
+        range_expectation=dataplex_v1.DataQualityRule.RangeExpectation(
+            min_value="0",
+            strict_min_enabled=False,
+        ),
+    ),
+    dataplex_v1.DataQualityRule(
+        name="remaining-capacity-non-negative",
+        column="remaining_capacity",
+        dimension="VALIDITY",
+        threshold=1.0,
+        range_expectation=dataplex_v1.DataQualityRule.RangeExpectation(
+            min_value="0",
+            strict_min_enabled=False,
+        ),
+    ),
+    dataplex_v1.DataQualityRule(
+        name="total-passengers-non-negative",
+        column="total_passengers",
+        dimension="VALIDITY",
+        threshold=1.0,
+        range_expectation=dataplex_v1.DataQualityRule.RangeExpectation(
+            min_value="0",
+            strict_min_enabled=False,
+        ),
+    ),
+    dataplex_v1.DataQualityRule(
+        name="passengers-within-capacity",
+        dimension="CONSISTENCY",
+        threshold=1.0,
+        row_condition_expectation=dataplex_v1.DataQualityRule.RowConditionExpectation(
+            sql_expression="total_passengers <= total_capacity"
+        ),
+    ),
+    dataplex_v1.DataQualityRule(
+        name="capacity-conservation",
+        dimension="CONSISTENCY",
+        threshold=1.0,
+        row_condition_expectation=dataplex_v1.DataQualityRule.RowConditionExpectation(
+            sql_expression="total_passengers + remaining_capacity = total_capacity"
+        ),
+    ),
+]
+
+data_scan = dataplex_v1.DataScan(
+    description="Automated Knowledge Catalog Data Quality scan for bus_rides Iceberg table.",
+    data=dataplex_v1.DataSource(
+        resource=f"//bigquery.googleapis.com/projects/{PROJECT_ID}/datasets/{BQ_DATASET}/tables/{TABLE_NAME}"
+    ),
+    data_quality_spec=dataplex_v1.DataQualitySpec(
+        rules=dq_rules,
+        post_scan_actions=dataplex_v1.DataQualitySpec.PostScanActions(
+            bigquery_export=dataplex_v1.DataQualitySpec.PostScanActions.BigQueryExport(
+                results_table=dq_results_table
+            )
+        ),
+    ),
+    execution_spec=dataplex_v1.DataScan.ExecutionSpec(
+        trigger=dataplex_v1.Trigger(on_demand=dataplex_v1.Trigger.OnDemand())
+    ),
+)
+
+try:
+    datascan_client.create_data_scan(
+        request=dataplex_v1.CreateDataScanRequest(
+            parent=dq_parent,
+            data_scan=data_scan,
+            data_scan_id=DQ_SCAN_ID,
+        )
+    ).result()
+    print(f"Created Data Quality scan: {dq_scan_name}")
+except api_exceptions.AlreadyExists:
+    data_scan.name = dq_scan_name
+    datascan_client.update_data_scan(
+        request=dataplex_v1.UpdateDataScanRequest(
+            data_scan=data_scan,
+            update_mask=field_mask_pb2.FieldMask(
+                paths=["description", "data_quality_spec", "execution_spec"]
+            ),
+        )
+    ).result()
+    print(f"Updated existing Data Quality scan: {dq_scan_name}")
+
+run_response = datascan_client.run_data_scan(
+    request=dataplex_v1.RunDataScanRequest(name=dq_scan_name)
+)
+job_name = run_response.job.name
+print(f"Triggered Data Quality job: {job_name}")
+
+terminal_states = {
+    dataplex_v1.DataScanJob.State.SUCCEEDED,
+    dataplex_v1.DataScanJob.State.FAILED,
+    dataplex_v1.DataScanJob.State.CANCELLED,
+}
+while True:
+    job = datascan_client.get_data_scan_job(
+        request=dataplex_v1.GetDataScanJobRequest(
+            name=job_name,
+            view=dataplex_v1.GetDataScanJobRequest.DataScanJobView.FULL,
+        )
+    )
+    if job.state in terminal_states:
+        break
+    time.sleep(10)
+
+dq_result = job.data_quality_result
+print(
+    f"Job state: {job.state.name} | Passed: {dq_result.passed} | Row count: {dq_result.row_count}"
+)
+print(
+    f"Console URL: https://console.cloud.google.com/dataplex/govern/quality/projects/{PROJECT_ID}/locations/{LOCATION}/dataScans/{DQ_SCAN_ID}?project={PROJECT_ID}"
+)
+pd.DataFrame(
+    [
+        {
+            "rule": r.rule.name,
+            "dimension": r.rule.dimension,
+            "column": r.rule.column or "(row)",
+            "passed": r.passed,
+            "pass_ratio": r.pass_ratio,
+            "failing_rows_query": r.failing_rows_query,
+        }
+        for r in dq_result.rules
+    ]
+)
+
+# %%
+# Verify end-to-end OpenLineage links recorded in Knowledge Catalog for bus_rides.
+# Note: Lineage ingestion is asynchronous and may take 1-2 minutes after spark.stop().
+from google.cloud import datacatalog_lineage_v1
+
+lineage_client = datacatalog_lineage_v1.LineageClient()
+target_fqn = f"bigquery:{PROJECT_ID}.{BQ_DATASET}.{TABLE_NAME}"
+links = list(
+    lineage_client.search_links(
+        request=datacatalog_lineage_v1.SearchLinksRequest(
+            parent=f"projects/{PROJECT_ID}/locations/{LOCATION}",
+            target=datacatalog_lineage_v1.EntityReference(
+                fully_qualified_name=target_fqn
+            ),
+        )
+    )
+)
+
+print(
+    f"BigQuery / Knowledge Catalog Lineage Graph: https://console.cloud.google.com/bigquery?project={PROJECT_ID}&ws=!1m5!1m4!4m3!1s{PROJECT_ID}!2s{BQ_DATASET}!3s{TABLE_NAME}"
+)
+if links:
+    display(
+        pd.DataFrame(
+            [
+                {
+                    "source_fqn": link.source.fully_qualified_name,
+                    "target_fqn": link.target.fully_qualified_name,
+                    "link_name": link.name,
+                }
+                for link in links
+            ]
+        )
+    )
+else:
+    print(
+        f"No upstream lineage links returned yet for {target_fqn}. Re-run this cell in 1-2 minutes."
+    )

@@ -16,7 +16,7 @@
 # %% [markdown]
 # # Ridership Open Lakehouse Demo (Part 3): Time-series forecasting of ridership data
 #
-# This notebook will demonstrate a strategy to implement an open lakehouse on GCP, using Apache Iceberg, as an open source standard for managing data, while still leveraging GCP native capabilities. This demo will use BigQuery Manged Iceberg Tables, Managed Apache Kafka and Apache Kafka Connect to ingest streaming data, Vertex AI for Generative AI queries on top of the data and Dataplex to govern tables.
+# This notebook will demonstrate a strategy to implement an open lakehouse on GCP, using Apache Iceberg, as an open source standard for managing data, while still leveraging GCP native capabilities. This demo will use BigQuery Managed Iceberg Tables, the Lakehouse Runtime Catalog (Apache Iceberg REST Catalog with Credential Vending), Serverless for Apache Spark, Managed Service for Apache Kafka and Apache Kafka Connect to ingest streaming data, BigQuery AI (`AI.FORECAST` powered by TimesFM) and BigQuery ML (`ARIMA_PLUS_XREG`) for forecasting, and Knowledge Catalog to govern tables, lineage, and data quality.
 #
 # This notebook will use the `bus_rides` data and ML models to generate a time-series forcasting of ridership in the future, in order to alert us when a bus about to become full.
 #
@@ -26,8 +26,6 @@
 # ## Environment Setup
 
 # %%
-USER_AGENT = "cloud-solutions/data-to-ai-nb-v3"
-
 # PROJECT_ID = !gcloud config get-value project
 PROJECT_ID = PROJECT_ID[0]
 
@@ -45,17 +43,14 @@ REST_CATALOG_PREFIX = "rest_namespace"
 
 print(PROJECT_ID)
 
-from google.api_core.client_info import ClientInfo
+# %%
+# !pip install google-cloud-dataplex google-colabsqlviz --quiet
 
 # %%
 from google.cloud import bigquery, storage
 
-bigquery_client = bigquery.Client(
-    project=PROJECT_ID, location=LOCATION, client_info=ClientInfo(user_agent=USER_AGENT)
-)
-storage_client = storage.Client(
-    project=PROJECT_ID, client_info=ClientInfo(user_agent=USER_AGENT)
-)
+bigquery_client = bigquery.Client(project=PROJECT_ID, location=LOCATION)
+storage_client = storage.Client(project=PROJECT_ID)
 
 # %%
 # Some helper functions
@@ -156,22 +151,25 @@ LEFT JOIN `{BQ_DATASET}.bus_lines` AS l ON l.bus_line_id = r.bus_line_id
 """
 bigquery_client.query(query).result()
 
+# Export updated Iceberg metadata snapshot to GCS for external query engines
+bigquery_client.query(
+    f"EXPORT TABLE METADATA FROM {BQ_DATASET}.{FEATURES_TABLE_NAME}"
+).result()
+
 # %%
 select_top_rows(FEATURES_TABLE_NAME)
 
 # %% [markdown]
 # ## Visualize Projected data
 #
-# Let's now create a visualization for each of these features, the relationship with the `ridership` column, to see the effects of different features on the target variable.
+# Let's interactively explore each feature and its relationship with `demand_metric` using [`google-colabsqlviz`](https://docs.cloud.google.com/managed-spark/docs/guides/visualize-dataframes-notebooks) (`explore_dataframe`). Built on `anywidget` and the Data Studio charting engine, each cell renders an interactive widget where you can switch between **Chart**, **Data** (paginated table), and **Split** views, filter dimensions, change aggregations, and export filtered slices to a new DataFrame—while all aggregations run locally in your Python kernel.
 
 # %% [markdown]
 # ### Demand per bus line over time
-# Let's take a look at the last 90 days of ridership data. We'll specifically look at the `remaining_at_stop` as our metric to determined if we need to alert of high demand. The higher the `remaining_at_stop`, the more demand we have, and we might want to dispatch more buses.
+# Let's take a look at the last 90 days of ridership data using `demand_metric` (`remaining_at_stop - remaining_capacity`). Higher values indicate passengers left behind after a bus departs, signaling where additional capacity may be needed. Use the widget's **Add filter** button to isolate specific `bus_line` values or switch to **Split** mode to inspect the underlying rows.
 
 # %%
-import matplotlib.pyplot as plt
-import pandas as pd
-import random
+from google.colabsqlviz.explore_dataframe import explore_dataframe
 
 DAYS_BACK = 90
 
@@ -179,7 +177,7 @@ demand_per_bus_line_df = (
     bigquery_client.query(
         f"""
 DECLARE max_ts TIMESTAMP DEFAULT (SELECT MAX(timestamp_at_stop) FROM {BQ_DATASET}.{FEATURES_TABLE_NAME});
-SELECT bus_line, timestamp_at_stop as timestamp_at_stop, AVG(demand_metric) AS demand_metric
+SELECT bus_line, timestamp_at_stop, AVG(demand_metric) AS demand_metric
   FROM `{BQ_DATASET}.{FEATURES_TABLE_NAME}`
   WHERE timestamp_at_stop > TIMESTAMP_SUB(max_ts, INTERVAL {DAYS_BACK} DAY)
   GROUP BY bus_line, timestamp_at_stop
@@ -190,33 +188,11 @@ SELECT bus_line, timestamp_at_stop as timestamp_at_stop, AVG(demand_metric) AS d
     .to_dataframe()
 )
 
-random.seed(42)
+explore_dataframe(demand_per_bus_line_df)
 
-# we'll sample 20 random lines, as displaying all of them is not practical
-bus_line_ids = random.sample(list(demand_per_bus_line_df.bus_line.unique()), k=20)
-
-figure = plt.figure(figsize=(20, 6))
-plt.xlabel("Timestamp at stop")
-# Group data by station ID
-for bus_line_id in bus_line_ids:
-    station_data = demand_per_bus_line_df[
-        demand_per_bus_line_df["bus_line"] == bus_line_id
-    ].sort_values(by="timestamp_at_stop")
-    # Plot ridership over time for the current bus line
-    plt.bar(
-        station_data["timestamp_at_stop"],
-        station_data["demand_metric"],
-        label=bus_line_id,
-    )
-
-# Customize the plot
-plt.xlabel("Timestamp at stop")
-plt.ylabel("Remaining Passengers")
-plt.title("Remaining Passengers Over Time by Bus Line")
-plt.legend()
-plt.xticks(rotation=45)
-plt.tight_layout()
-plt.show()
+# %% [markdown]
+# ### Demand per bus stop over time
+# Filter by `bus_stop_id` in the widget toolbar to compare demand spikes across individual stops without sampling away the rest of the network.
 
 # %%
 DAYS_BACK = 90
@@ -225,7 +201,7 @@ demand_per_bus_stop_df = (
     bigquery_client.query(
         f"""
 DECLARE max_ts TIMESTAMP DEFAULT (SELECT MAX(timestamp_at_stop) FROM {BQ_DATASET}.{FEATURES_TABLE_NAME});
-SELECT bus_stop_id, timestamp_at_stop as timestamp_at_stop, AVG(demand_metric) AS demand_metric
+SELECT bus_stop_id, timestamp_at_stop, AVG(demand_metric) AS demand_metric
   FROM `{BQ_DATASET}.{FEATURES_TABLE_NAME}`
   WHERE timestamp_at_stop > TIMESTAMP_SUB(max_ts, INTERVAL {DAYS_BACK} DAY)
   GROUP BY bus_stop_id, timestamp_at_stop
@@ -236,74 +212,34 @@ SELECT bus_stop_id, timestamp_at_stop as timestamp_at_stop, AVG(demand_metric) A
     .to_dataframe()
 )
 
-random.seed(42)
-
-# we'll sample 20 random lines, as displaying all of them is not practical
-bus_stop_ids = random.sample(list(demand_per_bus_stop_df.bus_stop_id.unique()), k=20)
-
-figure = plt.figure(figsize=(20, 6))
-plt.xlabel("Timestamp at stop")
-# Group data by station ID
-for bus_stop_id in bus_stop_ids:
-    station_data = demand_per_bus_stop_df[
-        demand_per_bus_stop_df["bus_stop_id"] == bus_stop_id
-    ].sort_values(by="timestamp_at_stop")
-    # Plot ridership over time for the current station
-    plt.bar(
-        station_data["timestamp_at_stop"],
-        station_data["demand_metric"],
-        label=bus_stop_id,
-    )
-
-# Customize the plot
-plt.xlabel("Timestamp at stop")
-plt.ylabel("Demand")
-plt.title("Demand Over Time by Bus Stop")
-plt.legend()
-plt.xticks(rotation=45)
-plt.tight_layout()
-plt.show()
+explore_dataframe(demand_per_bus_stop_df)
 
 # %% [markdown]
-# ### Distribution of demand per Borough (boxplot)
+# ### Distribution of demand per Borough (quantiles & average)
+# Switch between **Chart**, **Data**, and **Split** views (or select another chart type in the Setup panel) to compare minimum, quartile (`q1_demand`, `median_demand`, `q3_demand`), `mean_demand`, and maximum demand across boroughs.
 
 # %%
-
 average_demand_per_borough = (
     bigquery_client.query(
         f"""
 SELECT
   borough,
-  APPROX_QUANTILES(demand_metric, 100)[OFFSET(0)] AS whislo,
-  APPROX_QUANTILES(demand_metric, 100)[OFFSET(25)] AS q1,
-  APPROX_QUANTILES(demand_metric, 100)[OFFSET(50)] AS med,
-  AVG(demand_metric) AS mean,
-  APPROX_QUANTILES(demand_metric, 100)[OFFSET(75)] AS q3,
-  APPROX_QUANTILES(demand_metric, 100)[OFFSET(100)] AS whishi
+  APPROX_QUANTILES(demand_metric, 100)[OFFSET(0)] AS min_demand,
+  APPROX_QUANTILES(demand_metric, 100)[OFFSET(25)] AS q1_demand,
+  APPROX_QUANTILES(demand_metric, 100)[OFFSET(50)] AS median_demand,
+  AVG(demand_metric) AS mean_demand,
+  APPROX_QUANTILES(demand_metric, 100)[OFFSET(75)] AS q3_demand,
+  APPROX_QUANTILES(demand_metric, 100)[OFFSET(100)] AS max_demand
  FROM `{BQ_DATASET}`.`{FEATURES_TABLE_NAME}`
  GROUP BY borough
+ ORDER BY median_demand DESC
 """
     )
     .result()
     .to_dataframe()
 )
 
-lst_of_dicts = average_demand_per_borough.to_dict(orient="records")
-fig, ax = plt.subplots()
-
-ax.bxp(
-    lst_of_dicts,
-    showfliers=False,
-    showmeans=True,
-    label=[x["borough"] for x in lst_of_dicts],
-    meanline=True,
-)
-ax.set_xticklabels([x["borough"] for x in lst_of_dicts])
-
-plt.ylabel("Demand")
-plt.title("Demand Per Borough")
-
-plt.show()
+explore_dataframe(average_demand_per_borough)
 
 # %% [markdown]
 # ### Average demand per month
@@ -319,6 +255,8 @@ SELECT
 FROM
   `{BQ_DATASET}`.`{FEATURES_TABLE_NAME}`
 GROUP BY
+  transit_month
+ORDER BY
   transit_month;
 """
     )
@@ -326,54 +264,30 @@ GROUP BY
     .to_dataframe()
 )
 
-# Sort by month to ensure correct chronological order in the plot
-average_demand_per_month = average_demand_per_month.sort_values(
-    by="transit_month"
-).reset_index()
-
-plt.figure(figsize=(10, 6))  # Adjust figure size
-
-plt.bar(
-    average_demand_per_month["transit_month"], average_demand_per_month["demand_metric"]
-)
-
-# Add plot labels and title
-plt.xlabel("Transit Month")
-plt.ylabel("Average Demand")
-plt.title("Average Demand per Month")
-plt.xticks(
-    average_demand_per_month["transit_month"]
-)  # Ensure all months are shown on x-axis
-plt.grid(True, linestyle="--", alpha=0.6)
-plt.tight_layout()
-plt.show()
-
+explore_dataframe(average_demand_per_month)
 
 # %% [markdown]
 # ### Average Demand per Day-of-Week
 
 # %%
-# Group average demand by day of week
+# Group average demand by day of week (keep day_of_week_num for chronological sorting)
 average_demand_per_day_of_week = (
     bigquery_client.query(
         f"""
 SELECT
-  EXTRACT(DAYOFWEEK FROM timestamp_at_stop) AS transit_day_of_week,
+  EXTRACT(DAYOFWEEK FROM timestamp_at_stop) AS day_of_week_num,
   AVG(demand_metric) AS demand_metric
 FROM
   `{BQ_DATASET}`.`{FEATURES_TABLE_NAME}`
 GROUP BY
-  transit_day_of_week;
+  day_of_week_num
+ORDER BY
+  day_of_week_num;
 """
     )
     .result()
     .to_dataframe()
 )
-
-# Sort by month to ensure correct chronological order in the plot
-average_demand_per_day_of_week = average_demand_per_day_of_week.sort_values(
-    by="transit_day_of_week"
-).reset_index()
 
 days_of_week = {
     1: "Sunday",
@@ -385,25 +299,10 @@ days_of_week = {
     7: "Saturday",
 }
 average_demand_per_day_of_week["transit_day_of_week"] = average_demand_per_day_of_week[
-    "transit_day_of_week"
+    "day_of_week_num"
 ].map(days_of_week)
-plt.figure(figsize=(10, 6))  # Adjust figure size
 
-plt.bar(
-    average_demand_per_day_of_week["transit_day_of_week"],
-    average_demand_per_day_of_week["demand_metric"],
-)
-
-# Add plot labels and title
-plt.xlabel("Transit Day of Week")
-plt.ylabel("Average Demand")
-plt.title("Average Demand per Day of Week")
-plt.xticks(
-    average_demand_per_day_of_week["transit_day_of_week"]
-)  # Ensure all months are shown on x-axis
-plt.grid(True, linestyle="--", alpha=0.6)
-plt.tight_layout()
-plt.show()
+explore_dataframe(average_demand_per_day_of_week)
 
 
 # %% [markdown]
@@ -499,7 +398,7 @@ select_top_rows(SUMMARIZED_FEATURES_TABLE)
 #
 # For details on the additional options, explanation of the training process, and best practices when training and using the model please refer to BigQuery documentation on [the CREATE MODEL statement for ARIMA_PLUS_XREG models](https://cloud.google.com/bigquery/docs/reference/standard-sql/bigqueryml-syntax-create-multivariate-time-series).
 #
-# The next query, will create a model based on data between June 1st, 2022 and 30th of November 2024. The limitation of date ranges is due to our data size, which can't all fit to the training limitations.
+# The next query creates a model based on data between January 1st, 2022 and November 30th, 2024. The limitation of date ranges is due to our data size, which can't all fit within the training limits.
 #
 # We also chose a training dataset in the past, but leave some data "unseen" to the model, to help us evaluate its accuracy.
 #
@@ -782,61 +681,210 @@ WHERE
 ORDER BY actual.time, actual.bus_line, actual.bus_stop_id
 """
 # print(query)
-bigquery_client.query(query).result().to_dataframe()
+bigquery_client.query(query).result()
 actual_vs_forecast_df = select_top_rows(ACTUAL_VS_FORECAST_TABLE_NAME)
 actual_vs_forecast_df.head()
 
 # %%
-# Aggregate data for plotting
+from google.colabsqlviz.explore_dataframe import explore_dataframe
+
+# Aggregate the full forecast horizon in BigQuery (instead of only the top-10 preview rows)
 plot_df = (
-    actual_vs_forecast_df.groupby("time_bucket")
-    .agg(
-        {
-            "observed_value": "mean",
-            "timesfm_forecast_value": "mean",
-            "arima_forecast": "mean",
-        }
+    bigquery_client.query(
+        f"""
+SELECT
+  time_bucket,
+  AVG(observed_value) AS observed_value,
+  AVG(timesfm_forecast_value) AS timesfm_forecast_value,
+  AVG(arima_forecast) AS arima_forecast,
+  AVG(timesfm_abs_error) AS timesfm_mae,
+  AVG(arima_abs_error) AS arima_mae
+FROM `{PROJECT_ID}.{BQ_DATASET}.{ACTUAL_VS_FORECAST_TABLE_NAME}`
+GROUP BY time_bucket
+ORDER BY time_bucket
+"""
     )
-    .reset_index()
+    .result()
+    .to_dataframe()
 )
 
-# Create the plot
-plt.figure(figsize=(15, 7))
-plt.plot(
-    plot_df["time_bucket"],
-    plot_df["observed_value"],
-    label="Observed Value",
-    marker="o",
-)
-plt.plot(
-    plot_df["time_bucket"],
-    plot_df["timesfm_forecast_value"],
-    label="TimesFM Forecast",
-    marker="x",
-)
-plt.plot(
-    plot_df["time_bucket"],
-    plot_df["arima_forecast"],
-    label="ARIMA Forecast",
-    marker="s",
+explore_dataframe(plot_df)
+
+# %% [markdown]
+# ## Governance, Data Quality & Downstream Lineage (Knowledge Catalog)
+#
+# Run an automated **Knowledge Catalog Data Quality** scan on the curated `bus_rides_features` Apache Iceberg table and inspect downstream BigQuery lineage linking `bus_rides` + `bus_stations` + `bus_lines` → `bus_rides_features` → `actual_vs_forecast`.
+
+# %%
+import time
+from google.api_core import exceptions as api_exceptions
+from google.cloud import dataplex_v1
+from google.protobuf import field_mask_pb2
+
+datascan_client = dataplex_v1.DataScanServiceClient()
+
+FEATURES_DQ_SCAN_ID = "bus-rides-features-dq-scan"
+dq_parent = f"projects/{PROJECT_ID}/locations/{LOCATION}"
+features_dq_scan_name = f"{dq_parent}/dataScans/{FEATURES_DQ_SCAN_ID}"
+features_dq_results_table = (
+    f"//bigquery.googleapis.com/projects/{PROJECT_ID}"
+    f"/datasets/{BQ_DATASET}/tables/bus_rides_features_dq_results"
 )
 
-# Customize the plot
-plt.xlabel("Time Bucket")
-plt.ylabel("Value")
-plt.title("Observed vs. Forecasted Values Over Time")
-plt.legend()
-plt.xticks(rotation=45)
-plt.grid(True)
-plt.tight_layout()
-plt.show()
+features_dq_rules = [
+    dataplex_v1.DataQualityRule(
+        name="timestamp-at-stop-not-null",
+        column="timestamp_at_stop",
+        dimension="COMPLETENESS",
+        threshold=1.0,
+        non_null_expectation=dataplex_v1.DataQualityRule.NonNullExpectation(),
+    ),
+    dataplex_v1.DataQualityRule(
+        name="bus-ride-id-not-null",
+        column="bus_ride_id",
+        dimension="COMPLETENESS",
+        threshold=1.0,
+        non_null_expectation=dataplex_v1.DataQualityRule.NonNullExpectation(),
+    ),
+    dataplex_v1.DataQualityRule(
+        name="bus-line-not-null",
+        column="bus_line",
+        dimension="COMPLETENESS",
+        threshold=1.0,
+        non_null_expectation=dataplex_v1.DataQualityRule.NonNullExpectation(),
+    ),
+    dataplex_v1.DataQualityRule(
+        name="borough-not-null",
+        column="borough",
+        dimension="COMPLETENESS",
+        threshold=1.0,
+        non_null_expectation=dataplex_v1.DataQualityRule.NonNullExpectation(),
+    ),
+    dataplex_v1.DataQualityRule(
+        name="demand-metric-not-null",
+        column="demand_metric",
+        dimension="COMPLETENESS",
+        threshold=1.0,
+        non_null_expectation=dataplex_v1.DataQualityRule.NonNullExpectation(),
+    ),
+    dataplex_v1.DataQualityRule(
+        name="remaining-capacity-pct-unit-interval",
+        column="remaining_capacity_percentage",
+        dimension="VALIDITY",
+        threshold=1.0,
+        range_expectation=dataplex_v1.DataQualityRule.RangeExpectation(
+            min_value="0",
+            max_value="1",
+            strict_min_enabled=False,
+            strict_max_enabled=False,
+        ),
+    ),
+    dataplex_v1.DataQualityRule(
+        name="left-behind-pct-unit-interval",
+        column="passengers_left_behind_percentage",
+        dimension="VALIDITY",
+        threshold=1.0,
+        range_expectation=dataplex_v1.DataQualityRule.RangeExpectation(
+            min_value="0",
+            max_value="1",
+            strict_min_enabled=False,
+            strict_max_enabled=False,
+        ),
+    ),
+]
+
+features_data_scan = dataplex_v1.DataScan(
+    description="Automated Knowledge Catalog Data Quality scan for bus_rides_features Iceberg table.",
+    data=dataplex_v1.DataSource(
+        resource=f"//bigquery.googleapis.com/projects/{PROJECT_ID}/datasets/{BQ_DATASET}/tables/{FEATURES_TABLE_NAME}"
+    ),
+    data_quality_spec=dataplex_v1.DataQualitySpec(
+        rules=features_dq_rules,
+        post_scan_actions=dataplex_v1.DataQualitySpec.PostScanActions(
+            bigquery_export=dataplex_v1.DataQualitySpec.PostScanActions.BigQueryExport(
+                results_table=features_dq_results_table
+            )
+        ),
+    ),
+    execution_spec=dataplex_v1.DataScan.ExecutionSpec(
+        trigger=dataplex_v1.Trigger(on_demand=dataplex_v1.Trigger.OnDemand())
+    ),
+)
+
+try:
+    datascan_client.create_data_scan(
+        request=dataplex_v1.CreateDataScanRequest(
+            parent=dq_parent,
+            data_scan=features_data_scan,
+            data_scan_id=FEATURES_DQ_SCAN_ID,
+        )
+    ).result()
+    print(f"Created Data Quality scan: {features_dq_scan_name}")
+except api_exceptions.AlreadyExists:
+    features_data_scan.name = features_dq_scan_name
+    datascan_client.update_data_scan(
+        request=dataplex_v1.UpdateDataScanRequest(
+            data_scan=features_data_scan,
+            update_mask=field_mask_pb2.FieldMask(
+                paths=["description", "data_quality_spec", "execution_spec"]
+            ),
+        )
+    ).result()
+    print(f"Updated existing Data Quality scan: {features_dq_scan_name}")
+
+run_response = datascan_client.run_data_scan(
+    request=dataplex_v1.RunDataScanRequest(name=features_dq_scan_name)
+)
+job_name = run_response.job.name
+terminal_states = {
+    dataplex_v1.DataScanJob.State.SUCCEEDED,
+    dataplex_v1.DataScanJob.State.FAILED,
+    dataplex_v1.DataScanJob.State.CANCELLED,
+}
+while True:
+    job = datascan_client.get_data_scan_job(
+        request=dataplex_v1.GetDataScanJobRequest(
+            name=job_name,
+            view=dataplex_v1.GetDataScanJobRequest.DataScanJobView.FULL,
+        )
+    )
+    if job.state in terminal_states:
+        break
+    time.sleep(10)
+
+dq_result = job.data_quality_result
+print(
+    f"Job state: {job.state.name} | Passed: {dq_result.passed} | Row count: {dq_result.row_count}"
+)
+print(
+    f"DQ Scan URL: https://console.cloud.google.com/dataplex/govern/quality/projects/{PROJECT_ID}/locations/{LOCATION}/dataScans/{FEATURES_DQ_SCAN_ID}?project={PROJECT_ID}"
+)
+print(
+    f"Lineage (bus_rides_features): https://console.cloud.google.com/bigquery?project={PROJECT_ID}&ws=!1m5!1m4!4m3!1s{PROJECT_ID}!2s{BQ_DATASET}!3s{FEATURES_TABLE_NAME}"
+)
+print(
+    f"Lineage (actual_vs_forecast): https://console.cloud.google.com/bigquery?project={PROJECT_ID}&ws=!1m5!1m4!4m3!1s{PROJECT_ID}!2s{BQ_DATASET}!3s{ACTUAL_VS_FORECAST_TABLE_NAME}"
+)
+pd.DataFrame(
+    [
+        {
+            "rule": r.rule.name,
+            "dimension": r.rule.dimension,
+            "column": r.rule.column or "(row)",
+            "passed": r.passed,
+            "pass_ratio": r.pass_ratio,
+            "failing_rows_query": r.failing_rows_query,
+        }
+        for r in dq_result.rules
+    ]
+)
 
 # %% [markdown]
 # # Conclusion
 
 # %% [markdown]
-# In this notebook, we used our open data lakehouse and connected it to BigQueryML and VertexAI to leverage native Google Cloud's capabilities to enhance our workflow, without losing mobility and freedom of our data.
+# In this notebook, we used our open data lakehouse with **BigQuery ML** (`ARIMA_PLUS_XREG`) and **BigQuery AI** (`AI.FORECAST` powered by **TimesFM**) to forecast bus stop demand directly inside BigQuery SQL without sacrificing Apache Iceberg openness and portability, and validated the curated feature table with **Knowledge Catalog** Data Quality scans and automatic lineage.
 #
-# We've created tried 2 time-series forecasting models, and compared the results. We've seen the TimesFM model being the clearly better model for our demo. That should not take away from trying out more options. Even here, the ARIMA_PLUS_XREG model can still be tweaked and changed in order to improve its accuracy.
+# We compared both time-series forecasting approaches side by side. While zero-shot **TimesFM** provides strong out-of-the-box accuracy in this demo, `ARIMA_PLUS_XREG` can still be tuned further for specific routes or exogenous drivers.
 #
-# In the next sections, we will use the TimesFM model to perform near-real-time predictions to anticipate spikes given new data from buses.
+# In the next chapter (Cloud Run real-time dashboard), we stream bus events through Managed Service for Apache Kafka and **Serverless for Apache Spark** Structured Streaming to monitor live capacity and emit overcrowding alerts.

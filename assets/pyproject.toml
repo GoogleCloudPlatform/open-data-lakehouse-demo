@@ -15,16 +15,18 @@
 [project]
 name = "open-data-lakehouse-demo-assets"
 version = "0.1.0"
-description = "These notebooks contains parts of the open data lakehbouse demo"
+description = "These notebooks contain parts of the open data lakehouse demo"
 requires-python = ">=3.11"
 dependencies = [
     "dataproc-spark-connect>=0.7.4",
     "faker>=37.11.0",
     "fastavro>=1.12.1",
     "google-cloud-bigquery>=3.38.0",
+    "google-cloud-datacatalog-lineage>=0.3.0",
+    "google-cloud-dataplex>=2.10.0",
     "google-cloud-storage>=3.4.1",
+    "google-colabsqlviz>=0.4.0",
     "jupyter>=1.1.1",
-    "matplotlib>=3.10.7",
     "pyspark>=4.0.1",
     "sodapy>=2.2.0",
 ]

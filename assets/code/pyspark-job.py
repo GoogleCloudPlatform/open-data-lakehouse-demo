@@ -14,19 +14,22 @@ from pyspark.sql.types import (
 )
 
 """
-Run this job using 
+Run this job using
 ```bash
-gcloud dataproc batches submit pyspark gs://<PROJECT_ID>>-ridership-lakehouse/assets/pyspark-job.py 
---region=<REGION>> --subnet=projects/<PROJECT_ID>/regions/<REGION>/subnetworks/<REGION>-open-lakehouse-subnet 
---version=2.3 --files="gs://<PROJECT_ID>-ridership-lakehouse/assets/ivySettings.xml" 
---properties=^$^'spark.jars.ivySettings=./ivySettings.xml$spark.jars.packages=org.apache.spark:spark-streaming-kafka
--0-10_2.13:3.5.1,org.apache.spark:spark-sql-kafka-0-10_2.13:3.5.1,
-com.google.cloud.hosted.kafka:managed-kafka-auth-login-handler:1.0.5' -- 
---kafka-brokers=bootstrap.kafka-cluster.<REGION>.managedkafka.<PROJECT_ID>.cloud.goog:9092 
---kafka-input-topic=bus-updates --kafka-alert-topic=capacity-alerts --spark-tmp-bucket=<PROJECT_ID>-dataproc-serverless 
---spark-checkpoint-location=gs://<PROJECT_ID>-dataproc-serverless/checkpoint 
+gcloud dataproc batches submit pyspark gs://<PROJECT_ID>-ridership-lakehouse/code/pyspark-job.py \
+--region=<REGION> --subnet=projects/<PROJECT_ID>/regions/<REGION>/subnetworks/<REGION>-open-lakehouse-subnet \
+--version=2.3 --files="gs://<PROJECT_ID>-ridership-lakehouse/code/ivySettings.xml" \
+--properties=^$^'spark.jars.ivySettings=./ivySettings.xml$spark.jars.packages=org.apache.spark:spark-streaming-kafka-0-10_2.13:3.5.1,org.apache.spark:spark-sql-kafka-0-10_2.13:3.5.1,com.google.cloud.hosted.kafka:managed-kafka-auth-login-handler:1.0.5' -- \
+--kafka-brokers=bootstrap.kafka-cluster.<REGION>.managedkafka.<PROJECT_ID>.cloud.goog:9092 \
+--kafka-input-topic=bus-updates --kafka-alert-topic=capacity-alerts --spark-tmp-bucket=<PROJECT_ID>-dataproc-serverless \
+--spark-checkpoint-location=gs://<PROJECT_ID>-dataproc-serverless/checkpoint \
 --bigquery-table=ridership_lakehouse.bus_state
 ```
+
+Note on OpenLineage / Knowledge Catalog:
+`spark.dataproc.lineage.enabled` is intentionally omitted here because Serverless for Apache Spark
+automated OpenLineage capture supports batch and interactive sessions (Notebooks Parts 1-2),
+not Spark Structured Streaming workloads.
 """
 
 

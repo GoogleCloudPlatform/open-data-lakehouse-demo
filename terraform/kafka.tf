@@ -127,6 +127,11 @@ resource "google_managed_kafka_connector" "bus-updates-bigquery-sink-connector" 
     "defaultDataset"                 = google_bigquery_dataset.ridership_lakehouse.dataset_id
   }
 
+  task_restart_policy {
+    minimum_backoff = "60s"
+    maximum_backoff = "900s"
+  }
+
   provider = google-beta
 }
 
@@ -146,6 +151,11 @@ resource "google_managed_kafka_connector" "capactiy-alerts-bigquery-sink-connect
     "value.converter"                = "org.apache.kafka.connect.json.JsonConverter"
     "value.converter.schemas.enable" = "false"
     "defaultDataset"                 = google_bigquery_dataset.ridership_lakehouse.dataset_id
+  }
+
+  task_restart_policy {
+    minimum_backoff = "60s"
+    maximum_backoff = "900s"
   }
 
   provider = google-beta

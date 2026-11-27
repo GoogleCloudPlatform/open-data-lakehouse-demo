@@ -62,6 +62,24 @@ resource "time_sleep" "wait_for_policy_propagation" {
   ]
 }
 
+# Pre-create the regional Cloud Build logs bucket so the custom cloud-build SA
+# stays scoped to roles/storage.objectAdmin without needing storage.buckets.create.
+resource "google_storage_bucket" "cloudbuild_logs" {
+  name                        = "${data.google_project.project.number}-${var.region}-cloudbuild-logs"
+  location                    = var.region
+  project                     = var.project_id
+  uniform_bucket_level_access = true
+  force_destroy               = true
+}
+
+# Cloud Build calls storage.buckets.get on the regional logs bucket; grant it
+# scoped strictly to this bucket rather than project-wide roles/storage.admin.
+resource "google_storage_bucket_iam_member" "cloudbuild_logs_bucket_reader" {
+  bucket = google_storage_bucket.cloudbuild_logs.name
+  role   = "roles/storage.legacyBucketReader"
+  member = "serviceAccount:${module.cloud_build_account.email}"
+}
+
 # See github.com/terraform-google-modules/terraform-google-gcloud
 module "gcloud_build_webapp" {
   source                = "github.com/terraform-google-modules/terraform-google-gcloud" # commit hash of version 3.5.0
@@ -70,6 +88,7 @@ module "gcloud_build_webapp" {
     builds submit ${path.module}/../webapp \
       --tag ${local.image_name_and_tag} \
       --project ${var.project_id} \
+      --billing-project ${var.project_id} \
       --region ${var.region} \
       --default-buckets-behavior regional-user-owned-bucket \
       --service-account "projects/${var.project_id}/serviceAccounts/${module.cloud_build_account.email}"
@@ -77,7 +96,8 @@ module "gcloud_build_webapp" {
   enabled               = true
 
   create_cmd_triggers = {
-    source_contents_hash = local.cloud_build_content_hash
+    source_contents_hash   = local.cloud_build_content_hash
+    cloudbuild_logs_bucket = google_storage_bucket_iam_member.cloudbuild_logs_bucket_reader.id
   }
 
   # Commenting the dependency for the wait command - the gcloud module has a bug when specifying explicit dependenceis

@@ -12,19 +12,19 @@
             can start and stop the simulation of the buses trips.
         </p>
         <p>
-            When you click the "Start Spark Simulation" button, it will deploy a managed apache spark workload, built with pyspark on the Dataproc Serverless platform. The pyspark streaming job will subscribe to the `bus-updates` topic in the kafka cluster. and will output 2 streams:
+            When you click the "Start Spark Simulation" button, it will deploy a managed Apache Spark workload built with PySpark on <strong>Serverless for Apache Spark</strong>. The PySpark streaming job subscribes to the <code>bus-updates</code> topic in the Kafka cluster and outputs 2 streams:
         </p>
         <ul class="space-y-1 text-gray-500 list-disc list-inside dark:text-gray-400">
-            <li>A full representation of the current state to the BigQuery "buses-state" table. the web app will periodically query this table, and update the table below to show the results.</li>
-            <li>Whenever capacity of a bus runs out, and people are forced to wait at the station, a message will be sent to the `capacity-alerts` topic.</li>
+            <li>A full representation of the current state to the BigQuery <code>bus_state</code> table. The web app periodically queries this table and updates the table below to show the results.</li>
+            <li>Whenever capacity of a bus runs out, and people are forced to wait at the station, a message is sent to the <code>capacity-alerts</code> topic.</li>
         </ul>
-        <p>The full code for the pyspark job is hosted on GCS: <a class="font-medium text-blue-600 underline dark:text-blue-500 hover:no-underline" href="{{ pyspark_file_link }}" target="_blank">{{ pyspark_file_link }}</a></p>
+        <p>The full code for the PySpark job is hosted on GCS: <a class="font-medium text-blue-600 underline dark:text-blue-500 hover:no-underline" href="{{ pyspark_file_link }}" target="_blank">{{ pyspark_file_link }}</a></p>
         <p>
-            When you click the "Start Kafka Simulation" button, it will start a background thread to push events of bus updates to the `bus-updates` topic.
-            These events, are based on past events, from the same date as today, but from 2024. We will query for 5 days worth of events, but push them to Kafka much faster, to show the development of data over time.
+            When you click the "Start Kafka Simulation" button, it will start a background thread to push events of bus updates to the <code>bus-updates</code> topic.
+            These events are based on past events from the same date as today, but from 2024. We query for 10 days worth of events and push them to Kafka much faster to show the development of data over time.
         </p>
         <p>
-            Note that the spark job takes some time to start, while dataproc serverless requires time to allocate resources. It is recommended to start the spark job, and wait for it to be in a RUNNING status, before starting the Kafka simulation.
+            Note that the Spark job takes some time to start while Serverless for Apache Spark allocates resources. It is recommended to start the Spark job and wait for it to be in a RUNNING status before starting the Kafka simulation.
         </p>
         <p class="text-gray-200 font-bold">
             Don't forget to turn off the simulation when done, to avoid unnecessary costs!

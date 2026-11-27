@@ -16,117 +16,108 @@ The architecture typically includes:
 - **Data Transformation**: Tools for processing and transforming data.
 - **Visualization/BI**: Tools for reporting and dashboard.
 
+## Architecture, Governance & Lineage
+
+This demo showcases Google Cloud's Open Data Lakehouse stack built on **Apache Iceberg**:
+
+- **BigQuery Managed Iceberg Tables (`Lakehouse for Apache Iceberg`)**: Managed storage lifecycle, clustering, and metadata export (`EXPORT TABLE METADATA`) for `bus_stations`, `ridership`, `bus_rides`, and `bus_rides_features`.
+- **Lakehouse Runtime Catalog (`Apache Iceberg REST Catalog`) with Credential Vending**: Provisioned via Terraform (`google_biglake_iceberg_catalog`) with `CREDENTIAL_MODE_VENDED_CREDENTIALS`. Only the catalog's managed service account holds bucket-scoped `roles/storage.objectUser`; engines receive short-lived, table-scoped storage tokens without broad bucket IAM.
+- **Dynamic 4-Part `P.C.N.T` Querying**: BigQuery queries Spark-managed `bus_lines` directly via `` `<PROJECT_ID>.<REST_CATALOG_BUCKET>.rest_namespace.bus_lines` `` exposed through a live BigQuery View (`ridership_lakehouse.bus_lines`), eliminating stale `metadata.json` external table pointers.
+- **Knowledge Catalog Governance & Auto Data Quality**:
+  - Terraform provisions a **Knowledge Catalog Business Glossary** (`ridership-lakehouse-glossary`) with canonical transit terms (`Demand Metric`, `Bus Capacity`, `Left Behind Passengers`).
+  - Notebooks Part 2 and Part 3 idempotently create and run **Auto Data Quality scans** (`bus-rides-dq-scan` and `bus-rides-features-dq-scan`), exporting results to `ridership_lakehouse`.
+- **End-to-End OpenLineage**:
+  - Enabled natively on **Serverless for Apache Spark** interactive Spark Connect sessions (`spark.dataproc.lineage.enabled = "true"`) in Notebooks Parts 1–2, alongside automatic BigQuery lineage in Part 3.
+  - *Limitation:* Serverless for Apache Spark automated OpenLineage capture supports batch and interactive sessions only — it does **not** cover Spark Structured Streaming (`assets/code/pyspark-job.py`).
+- **BigQuery AI & ML Forecasting**: Compares `ARIMA_PLUS_XREG` (`BigQuery ML`) against zero-shot `AI.FORECAST` powered by **TimesFM**.
+
 ## Prerequisites
 
 Before you begin, ensure you have the following installed:
 
-- Terraform
-- gcloud storage
+- Terraform (`>= 1.5.7`; uses `hashicorp/google` `>= 7.37.0, < 8.0.0`)
+- Google Cloud CLI (`gcloud` / `gcloud storage`)
+- IAM permission `serviceusage.services.use` on your target `project_id` (required for User ADC `user_project_override = true` with the Lakehouse Runtime Catalog API)
 
 ## Deployment
 
-This project might include Terraform configurations for deploying to cloud providers like AWS.
-
-1. **Make sure your gcloud is authenticated :**
-   Ensure your gcloud utility is configured with appropriate credentials and a default region.
+1. **Make sure your `gcloud` CLI and Application Default Credentials are authenticated:**
    ```bash
-   gcloud auth
+   gcloud auth login
+   gcloud auth application-default login
    ```
 2. **Initialize Terraform:**
    ```bash
    cd terraform
    terraform init
-
-3. **Create a `terraform.tfvars` file**
+   ```
+3. **Create a `terraform.tfvars` file:**
    ```bash
    cp terraform.tfvars.example terraform.tfvars
-
-4. **Edit the `terraofmr.tfvars` file to hold your variables**
-
-5. **Run terraform**
+   ```
+4. **Edit `terraform.tfvars` with your `project_id` and `region`.**
+5. **Run Terraform:**
    ```bash
    terraform apply
    ```
-6. **Note the terraform output variables**
-   We will need them later.
+6. **Note the Terraform output variables** (including `cloud_run_url`, `iceberg_rest_catalog_id`, `iceberg_rest_catalog_sa`, and `knowledge_catalog_glossary_id`).
 
 ## Loading the notebooks
 
-The first parts of this demo are based on step by step guide in a Jupyter Notebooks, best run on Google Clouds
-**Colab Enterprise** product.
+The first parts of this demo are step-by-step Jupyter notebooks designed to run in Google Cloud's **BigQuery Studio Notebooks** (with **Spark Connect** on **Serverless for Apache Spark**):
 
-1. Open your browser and go to the [Google Clouds Console](https://console.cloud.google.com/).
-2. Make sure you select the right project where the terraform setup deployed the assets.
-3. In the search bar, search for `Colab Enterprise`
-4. Click "Import notebooks"
-5. Select the "From Cloud Storage" option
-6. Load all 4 Jupyter notebooks from the `<YOUR_PROJECT>-lakehouse-ridership` bucket, under the `notebooks`
-   folder.
-7. Open the notebooks in order - and follow the instructions. **Note:** the first notebook (part 0) is optional.
+1. Open your browser and go to the [Google Cloud Console](https://console.cloud.google.com/).
+2. Make sure you select the project where Terraform deployed the assets.
+3. Navigate to **BigQuery Studio** → **Notebooks** (or search for `BigQuery Studio`).
+4. Click **Upload** / **Import notebooks** and select **From Cloud Storage**.
+5. Load all 4 Jupyter notebooks from the `<YOUR_PROJECT>-ridership-lakehouse` bucket under the `notebooks/` folder.
+6. Open and run the notebooks in order. **Note:** Part 0 (`lakehouse_part0_data_generation`) is optional when using the pre-staged data copied by Terraform.
 
 ## Running the real-time analysis
 
-We also deployed a web app to the Cloud run service, to showcase near realtime processing and alerting. From the
-terraform outputs, note the "cloud_run_url" output variable. Open the link in a browser, and follow the on-screen
-instructions. **Note** that this part has a dependency on running at least the notebooks part 1 and part 2.
+Terraform also deploys a web app to Cloud Run to showcase near-real-time processing and alerting. From the Terraform outputs, note the `cloud_run_url` output variable, open it in a browser, and follow the on-screen instructions. **Note:** This part depends on running at least Notebooks Part 1 and Part 2 first.
 
 ## Project structure
 
 In this repo, you will find the following folders:
 
-- `assets`: Code and notebooks assets
-    - `code`: Contains the pyspark job file and supporting files
-        - `ivySettings.xml`: definition of maven repos, so the spark job can pull some external dependencies, namely the
-          `confluant-kafka` dependency. In a production environment, consider pre-bundling your dependencies, so
-          external dependencies are NOT pulled at runtime.
-        - `pyspark-job.py`: The pyspark streaming job, listening to kafka events, and outputting buses state to BQ, as
-          well as alert messages to another kafka topic.
-        - `run-pyspark.sh`: shell script for testing to run the job.
-    - `notebooks`: Contains all notebooks that are used in this demo, and are meant to be run in colab enterprise or
-      BigQuery studio. There is blocker to run them locally, just make sure some plugins are pre-configured on those
-      environments (e.g. bash operator `!`, sql magic `%sql` etc.). We are
-      using [jupytext](https://jupytext.readthedocs.io/en/latest/) package for development,
-      so for
-      each `.ipynb` file, there is a matching `.py` file, to make git tracking and comparison easier.
-- `webapp`: The webapp (flask) to display real-time data. The app has 2 important background workers that are activated
-  when the corresponding buttons are pressed in the web interface.
-    - `kafka_service`: When started, this service will query BigQuery `bus_rides` table, for 5 days worth of data from "
-      today in 2024", change the results to look like new messages from now, and push to kafka `bus-updates` topic.
-    - `pyspark_service`: When started, this service will start the pyspark streaming job, and monitor its status.
+- `assets`: Code and notebook assets
+    - `code`: Contains the PySpark streaming job and supporting files
+        - `ivySettings.xml`: Definition of Maven repos so the Spark job can pull external dependencies (`confluent-kafka` / Managed Kafka auth handler). In production, pre-bundle dependencies rather than pulling at runtime.
+        - `pyspark-job.py`: The PySpark Structured Streaming job on Serverless for Apache Spark, listening to Kafka `bus-updates`, writing live state to BigQuery `bus_state`, and emitting alerts to `capacity-alerts`.
+        - `run-pyspark.sh`: Shell script for manually submitting the streaming job.
+    - `notebooks`: Contains all notebooks used in this demo, designed to run in **BigQuery Studio Notebooks** (pre-configured with `!` shell commands and Spark Connect). We use [jupytext](https://jupytext.readthedocs.io/en/latest/) so each `.ipynb` file has a paired `.py` percent script for clean Git diffs.
+- `webapp`: The Flask web app displaying real-time bus capacity data, with two background workers triggered by UI controls (protected by `ADMIN_TOKEN` bearer auth on state-changing POST endpoints):
+    - `kafka_service`: Queries the BigQuery `bus_rides` table for 10 days of historical data from the same calendar window in 2024, shifts timestamps forward to simulate live traffic, and publishes messages to the Kafka `bus-updates` topic.
+    - `pyspark_service`: Starts, monitors, and cancels the Serverless for Apache Spark streaming batch job (`pyspark-streaming-job`).
 
 ## Development
 
-In the `assets` and the `webapp` folders, use `uv` to install the virtual environments for each of these sub-projects.
+In the `assets` and `webapp` folders, use `uv` to install the virtual environments for each sub-project.
 
-When working with the notebooks, pay attention that the notebooks outputs have to be cleared, and the contents needs to
-synced with matching `py` files.
-To do so, there are 2 tools that are installed as a `dev` group:
+When editing notebooks, notebook outputs must be cleared and contents kept synchronized with their matching `.py` percent files. Two tools are installed in the `dev` dependency group:
 
-1. [jupytext](https://jupytext.readthedocs.io/en/latest/) for syncing content between `ipynb` files
-   and `py` files
-2. [nbstripout](https://github.com/kynan/nbstripout) that can be triggered to clean outputs from ipynb files.
+1. [jupytext](https://jupytext.readthedocs.io/en/latest/) for syncing content between `.ipynb` and `.py` files.
+2. [nbstripout](https://github.com/kynan/nbstripout) for stripping outputs from `.ipynb` files.
 
-There is a `clean.sh` file that is recommended to run before creating a PR, as these things are being checked on every
-PR.
+Run both commands from the `assets` directory before opening a PR:
+
+```bash
+uv run jupytext --sync notebooks/*.py --to ipynb
+uv run nbstripout notebooks/*.ipynb
+```
 
 ### GitHub Actions
 
-There is also a GitHub actions that checks for 2 things on every PR to the `main` or `workshop` branches:
+A GitHub Actions workflow checks two invariants on every PR to `main` or `workshop`:
 
-1. Checks with jupytext for synced pairs. This should be ok, as long as the pre-commit hook was installed correctly, as
-   unsynced changes can't be commited. if needed, you can run the following command from your `assets` directory using
-   `uv`:
+1. **Notebook/script sync** via `jupytext`:
+   ```bash
+   uv run jupytext --test notebooks/*.ipynb --to py:percent
+   ```
+2. **Stripped outputs** via `nbstripout`:
+   ```bash
+   uv run nbstripout --verify notebooks/*.ipynb
+   ```
 
-  ```bash
-  uv run jupytext --sync --to py:percent
-  ```
-
-2. Another check to verify all outputs are stripped from the ipynb files, using `nbstripout`. This causes issues when
-   integrated into the pre-commit hook, as described above. If this check fails on the PR, you can run this command from
-   your `assets` directory using `uv`:
-
-  ```bash
-  uv run nbstripout **/*.ipynb;
-  ```
-
-These actions are **testing** the files, not changing anything on the PR.
+These checks **verify** the files and do not modify PR commits automatically.

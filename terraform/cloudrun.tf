@@ -119,7 +119,8 @@ resource "google_cloud_run_v2_service" "default" {
     module.gcloud_build_webapp.wait,
     module.project_services,
     google_project_iam_member.cloud_run_user_bq_permissions,
-    google_project_iam_member.cloud_run_user_dataproc_permissions
+    google_project_iam_member.cloud_run_user_dataproc_permissions,
+    google_biglake_iceberg_catalog_iam_member.cloudrun_sa_catalog_viewer
   ]
 
   lifecycle {

@@ -18,11 +18,11 @@
 #
 # This notebook will demonstrate a strategy to implement an open lakehouse on GCP, using Apache Iceberg,
 # as an open source standard for managing data, while still leveraging GCP native capabilities. This demo will use
-# BigQuery Manged Iceberg Tables, Managed Apache Kafka and Apache Kafka Connect to ingest streaming data, Vertex AI for Generative AI queries on top of the data and Dataplex to govern tables.
+# BigQuery Managed Iceberg Tables, the Lakehouse Runtime Catalog (Apache Iceberg REST Catalog with Credential Vending), Serverless for Apache Spark, Managed Service for Apache Kafka and Apache Kafka Connect to ingest streaming data, BigQuery AI (`AI.FORECAST` powered by TimesFM) for forecasting, and Knowledge Catalog to govern tables, lineage, and data quality.
 #
 # This notebook will generate fake data and anonymized real-world data.
 #
-# the real-world data used in this notebook is from [MTA daily ridership data](https://data.ny.gov/Transportation/MTA-Daily-Ridership-Data-2020-2025/vxuj-8kew/data_preview).
+# The real-world data used in this notebook is from [MTA Subway Hourly Ridership (2020–2024)](https://data.ny.gov/Transportation/MTA-Subway-Hourly-Ridership-2020-2024/wujg-7c2s/about_data).
 #
 # Rest of the data is being randomly generated inside the notebook.
 
@@ -31,8 +31,6 @@
 
 # %%
 import os
-
-USER_AGENT = "cloud-solutions/data-to-ai-nb-v3"
 
 # PROJECT_ID = !gcloud config get-value project
 PROJECT_ID = PROJECT_ID[0]
@@ -49,15 +47,10 @@ print(BUCKET_NAME)
 
 # %%
 from google.cloud import bigquery, storage
-from google.api_core.client_info import ClientInfo
 from google.cloud import exceptions
 
-bigquery_client = bigquery.Client(
-    project=PROJECT_ID, location=LOCATION, client_info=ClientInfo(user_agent=USER_AGENT)
-)
-storage_client = storage.Client(
-    project=PROJECT_ID, client_info=ClientInfo(user_agent=USER_AGENT)
-)
+bigquery_client = bigquery.Client(project=PROJECT_ID, location=LOCATION)
+storage_client = storage.Client(project=PROJECT_ID)
 
 # %%
 dataset = bigquery.Dataset(f"{PROJECT_ID}.{STAGING_BQ_DATASET}")
@@ -75,7 +68,7 @@ dataset = bigquery_client.create_dataset(dataset, exists_ok=True)
 # If you haven't created this demo using our terraform scripts, the easiest way to get a hold of the data would be to run the following `gcloud storage` command:
 #
 # ```bash
-# gcloud storage rsync --recursive gs://data-lakehouse-demo-data-assets/  gs://<YOUR_BUCKET_NAME>/
+# gcloud storage cp --recursive --no-clobber "gs://data-lakehouse-demo-data-assets/*" "gs://<YOUR_BUCKET_NAME>/"
 # ```
 #
 # Downloading the CSV manually is the more efficient option, but still very slow, so you would have to send the request, and keep your machine and browser awake for a few hours (yes, hours, was about 2 hours in my case) before the CSV starts downloading.
