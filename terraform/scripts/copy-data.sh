@@ -8,5 +8,7 @@ then
     exit 1
 fi
 
-echo "Syncing gs://data-lakehouse-demo-data-assets/ to gs://$BUCKET_NAME/"
-gcloud storage rsync --recursive gs://data-lakehouse-demo-data-assets/ gs://$BUCKET_NAME/
+echo "Copying gs://data-lakehouse-demo-data-assets/ to gs://$BUCKET_NAME/"
+# Use `cp --recursive --no-clobber` instead of `rsync` because the public source bucket
+# grants object-level read/list (roles/storage.objectViewer) without storage.buckets.get.
+gcloud storage cp --recursive --no-clobber "gs://data-lakehouse-demo-data-assets/*" "gs://$BUCKET_NAME/"

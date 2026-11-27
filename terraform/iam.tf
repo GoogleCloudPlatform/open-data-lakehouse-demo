@@ -12,17 +12,21 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# Grant the Dataproc Worker role to the default compute service account.
-# This is required for Dataproc Serverless jobs to run with the default compute SA.
+# Grant required roles to the default compute service account for
+# Serverless for Apache Spark, Lakehouse Runtime Catalog, Knowledge Catalog
+# Data Quality scans, and OpenLineage ingestion.
 resource "google_project_iam_member" "extra_roles_for_compute_sa" {
   for_each = toset([
-    "roles/dataproc.worker", 
-    "roles/iam.serviceAccountUser", 
-    "roles/iam.serviceAccountTokenCreator", 
-    "roles/managedkafka.client", 
+    "roles/dataproc.worker",
+    "roles/iam.serviceAccountUser",
+    "roles/iam.serviceAccountTokenCreator",
+    "roles/managedkafka.client",
     "roles/iam.serviceAccountOpenIdTokenCreator",
     "roles/iam.workloadIdentityUser",
-    ])
+    "roles/datalineage.producer",
+    "roles/biglake.editor",
+    "roles/dataplex.dataScanEditor",
+  ])
   project = var.project_id
   role    = each.value
   member  = "serviceAccount:${data.google_project.project.number}-compute@developer.gserviceaccount.com"

@@ -18,11 +18,11 @@ terraform {
   required_providers {
     google = {
       source  = "hashicorp/google"
-      version = ">= 6.49.1"
+      version = ">= 7.37.0, < 8.0.0"
     }
     google-beta = {
       source  = "hashicorp/google-beta"
-      version = ">= 6.49.1"
+      version = ">= 7.37.0, < 8.0.0"
     }
     local = {
       source  = "hashicorp/local"
@@ -33,4 +33,20 @@ terraform {
   provider_meta "google" {
     module_name = "cloud-solutions/open-data-lakehouse-demo-v1"
   }
+}
+
+# user_project_override + billing_project are required when managing
+# google_biglake_iceberg_catalog and its IAM bindings with User ADCs.
+provider "google" {
+  project               = var.project_id
+  region                = var.region
+  billing_project       = var.project_id
+  user_project_override = true
+}
+
+provider "google-beta" {
+  project               = var.project_id
+  region                = var.region
+  billing_project       = var.project_id
+  user_project_override = true
 }

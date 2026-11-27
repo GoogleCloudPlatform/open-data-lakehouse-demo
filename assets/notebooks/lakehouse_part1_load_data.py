@@ -18,7 +18,7 @@
 #
 # This notebook will demonstrate a strategy to implement an open lakehouse on GCP, using Apache Iceberg,
 # as an open source standard for managing data, while still leveraging GCP native capabilities. This demo will use
-# BigQuery Manged Iceberg Tables, Managed Apache Kafka and Apache Kafka Connect to ingest streaming data, Vertex AI for Generative AI queries on top of the data and Dataplex to govern tables.
+# BigQuery Managed Iceberg Tables, the Lakehouse Runtime Catalog (Apache Iceberg REST Catalog with Credential Vending), Serverless for Apache Spark, Managed Service for Apache Kafka and Apache Kafka Connect to ingest streaming data, BigQuery AI (`AI.FORECAST` powered by TimesFM) for forecasting, and Knowledge Catalog to govern tables, lineage, and data quality.
 #
 # This notebook will load data into BigQuery, backed by Parquet files, in the Apache Iceberg specification.
 #
@@ -27,7 +27,7 @@
 # If you haven't created this demo using our terraform scripts, the easiest way to get a hold of the data would be to run the following `gcloud storage` command:
 #
 # ```bash
-# gcloud storage rsync --recursive gs://data-lakehouse-demo-data-assets/ gs://<YOUR_BUCKET_NAME>/
+# gcloud storage cp --recursive --no-clobber "gs://data-lakehouse-demo-data-assets/*" "gs://<YOUR_BUCKET_NAME>/"
 # ```
 #
 # All data in this notebook was prepared in the previous `part0` notebook.
@@ -36,8 +36,6 @@
 # ## Setup the environment
 
 # %%
-USER_AGENT = "cloud-solutions/data-to-ai-nb-v3"
-
 # PROJECT_ID = !gcloud config get-value project
 PROJECT_ID = PROJECT_ID[0]
 
@@ -56,18 +54,13 @@ REST_CATALOG_PREFIX = "rest_namespace"
 print(PROJECT_ID)
 
 # %%
-# !pip install fastavro --quiet
+# !pip install fastavro google-cloud-dataplex --quiet
 
 # %%
 from google.cloud import bigquery, storage
-from google.api_core.client_info import ClientInfo
 
-bigquery_client = bigquery.Client(
-    project=PROJECT_ID, location=LOCATION, client_info=ClientInfo(user_agent=USER_AGENT)
-)
-storage_client = storage.Client(
-    project=PROJECT_ID, client_info=ClientInfo(user_agent=USER_AGENT)
-)
+bigquery_client = bigquery.Client(project=PROJECT_ID, location=LOCATION)
+storage_client = storage.Client(project=PROJECT_ID)
 
 general_bucket = storage_client.bucket(GENERAL_BUCKET_NAME)
 print(bigquery_client.project)
@@ -130,8 +123,8 @@ def select_top_rows(table_name: str, num_rows: int = 10):
 #
 # BigQuery offers two ways to work with Apache Iceberg tables:
 #
-# 1. **[BigQuery Tables for Apache Iceberg](https://cloud.google.com/bigquery/docs/iceberg-tables#create-iceberg-tables)**.
-# 2. **[BigLake metastore with the Iceberg REST catalog](https://cloud.google.com/bigquery/docs/blms-rest-catalog)**
+# 1. **[BigQuery Tables for Apache Iceberg](https://cloud.google.com/bigquery/docs/iceberg-tables#create-iceberg-tables)** (*Lakehouse for Apache Iceberg* — managed by BigQuery).
+# 2. **[Lakehouse Runtime Catalog (Apache Iceberg REST Catalog with Credential Vending)](https://cloud.google.com/bigquery/docs/blms-rest-catalog)** — queried dynamically in BigQuery via 4-part `P.C.N.T` syntax.
 #
 # For most migration and native BigQuery use cases, **BigQuery Tables for Apache Iceberg (managed by BigQuery) is the strongly preferred method.**
 #
@@ -173,49 +166,51 @@ def select_top_rows(table_name: str, num_rows: int = 10):
 #
 # -----
 #
-# **2\. BigLake metastore with the Iceberg REST catalog**
+# **2\. Lakehouse Runtime Catalog (Apache Iceberg REST Catalog with Credential Vending)**
 #
 #
-# These tables allow BigQuery to query Iceberg data managed by external systems like Spark or Hive. They are best for hybrid setups where multiple tools need read access and an external system controls the table's lifecycle.
+# These tables allow BigQuery to dynamically query Iceberg data managed by external engines such as Serverless for Apache Spark, Trino, or Flink without static `metadata.json` pointers. With **Credential Vending** (`CREDENTIAL_MODE_VENDED_CREDENTIALS`), only the catalog's managed service account holds GCS bucket access; authorized engines receive short-lived, table-scoped storage tokens.
 #
-# **SQL Example:**
+# **SQL Example (4-part `project.catalog.namespace.table` syntax):**
 #
 # ```sql
-# CREATE OR REPLACE EXTERNAL TABLE `your-project.your_dataset.your_external_iceberg_table`
-#   WITH CONNECTION `your-region.your_connection_name`
-#   OPTIONS (
-#          format = 'ICEBERG',
-#          uris = ["gs://mybucket/mydata/mytable/metadata/iceberg.metadata.json"]
-#    )
+# SELECT *
+# FROM `your-project.your-catalog-id.your_namespace.your_iceberg_table`
+# LIMIT 10;
+#
+# -- Optional compatibility view for downstream SQL and apps:
+# CREATE OR REPLACE VIEW `your-project.your_dataset.your_iceberg_table` AS
+# SELECT *
+# FROM `your-project.your-catalog-id.your_namespace.your_iceberg_table`;
 # ```
 #
 # **Key Points:**
 #
-#   * **External Control:** Metadata and data managed outside BigQuery.
-#   * **Read-Only:** BigQuery can only query; DML operations are not supported.
-#   * **Hybrid Fit:** Ideal for shared access from various tools.
-#   * **Metadata:** Manual updates for static JSON pointers; BigLake Metastore preferred for dynamic syncing in GCP.
+#   * **External Control:** Metadata and data managed outside BigQuery via the open Iceberg REST Catalog API.
+#   * **Dynamic Snapshot Resolution:** Always reads the latest committed snapshot with zero manual `metadata.json` refreshes.
+#   * **Least-Privilege Credential Vending:** Table-level catalog IAM (`roles/biglake.viewer`) replaces broad GCS bucket permissions.
+#   * **Automatic Knowledge Catalog Discovery:** Catalogs, namespaces, and tables register automatically in **Knowledge Catalog**.
 #
 #
 # #### How to Choose?
 #
-# Generally, to leverage the most out of you Iceberg data, prefer the managed tables. They provide better integration and automatic optimization.
+# Generally, to leverage the most out of your Iceberg data, prefer the managed tables. They provide better integration and automatic optimization.
 #
-# If you have BigQuery centric pipelines, with data generated by BigQuery, managed iceberg tables are the obvious choice.
+# If you have BigQuery-centric pipelines, with data generated by BigQuery, managed Iceberg tables are the obvious choice.
 #
-# Choose external tables, if you have spark centric pipelines (or another external engine) that generate and write Iceberg data in GCS, and BigQuery only requires read-only access.
+# Choose the **Lakehouse Runtime Catalog** when you have Spark-centric pipelines (or other external engines) that write Iceberg data to GCS and want dynamic, governed read access from BigQuery via 4-part `P.C.N.T` naming.
 #
-# In a real world scenario, you will probably have some of both, so a truly unified data platform would have a mixture of both tables.
+# In a real-world scenario, you will probably use both, so a truly unified data platform combines both table types.
 #
-# In this notebook, we will create the 2 different types of tables, to demonstrate that the 2 methods can be combined according to your needs.
+# In this notebook, we will create both types of tables to demonstrate how they work together:
 #
-# We will generate managed tables for the `bus_stations` and `ridership` datasets, while for the `bus_lines` dataset, we will write iceberg data directly to GCS, using Apache Spark, and mount the data as an external table in BigQuery.
+# We will create BigQuery Managed Iceberg tables for `bus_stations` and `ridership`, while for `bus_lines` we will write Apache Iceberg data using **Serverless for Apache Spark** into our Terraform-provisioned **Lakehouse Runtime Catalog** (with **Credential Vending**) and expose it dynamically in BigQuery via a 4-part `P.C.N.T` view.
 #
 
 # %% [markdown]
 # ### The `bus_stations` table
 #
-# This table will be loaded as a BigQuery Iceberg table (option 2)- managed by BigQuery, read-only access to other processing engines.
+# This table will be loaded as a BigQuery Managed Iceberg table (option 1) — managed by BigQuery, with read-only access for external processing engines.
 #
 
 # %%
@@ -298,11 +293,11 @@ job.result()
 display_blobs_with_prefix(BQ_CATALOG_BUCKET_NAME, bus_stops_prefix)
 
 # %% [markdown]
-# We can see in the output that we have some parquet files generated under the `iceberg_data/bus_stations/data/` folder, and one `v0.metadata.json` under the `iceberg_data/bus_stations/metadata/` folder.
+# We can see in the output that we have some parquet files generated under the `bq_namespace/bus_stations/data/` folder, and one `v0.metadata.json` under the `bq_namespace/bus_stations/metadata/` folder.
 #
-# The `iceberg_data/bus_stations/data` folder, contains the `parquet` files with the actual data.
+# The `bq_namespace/bus_stations/data` folder contains the `parquet` files with the actual data.
 #
-# The `iceberg_data/bus_stations/metadata` folder contains the metadata files - currently only one - but more data will be in there, as our tables evolve (schema changes, rollbacks etc.).
+# The `bq_namespace/bus_stations/metadata` folder contains the metadata files - currently only one - but more data will be in there as our tables evolve (schema changes, rollbacks, etc.).
 #
 # The `v0.metadata.json` file, which can have other prefixes, contains the important info for this version of the table. Let's take a quick look at this file.
 
@@ -420,17 +415,13 @@ with avro_file.open("rb") as fo:
 # %% [markdown]
 # ### The `bus_lines` table
 #
-# For the `bus_lines` table, we want to simulate a table that is managed by Spark, and BigQuery is just needs to read the table.
+# For the `bus_lines` table, we simulate a table managed by **Serverless for Apache Spark** where BigQuery reads the latest committed snapshot dynamically.
 #
-# For that we will use the `EXTERNAL` Iceberg tables (method 2), managed by OSS engines, read-only by BigQuery.
+# For that we use the **Lakehouse Runtime Catalog** (option 2 — Apache Iceberg REST Catalog), pre-provisioned by Terraform with **Credential Vending** (`CREDENTIAL_MODE_VENDED_CREDENTIALS`).
 #
-# To simulate that, we will start a PySpark process to read the data from the staged bucket, and write it back in Iceberg format to another bucket
+# To simulate that, we start a Serverless for Apache Spark Connect session (with native **OpenLineage** enabled for **Knowledge Catalog**), read the staged Parquet files, write `bus_lines` in Iceberg format using vended credentials, and expose it in BigQuery via 4-part `P.C.N.T` syntax and a live View.
 #
-# Then mount the data in a BigQuery external table.
-#
-# We will also look at the Iceberg metadata generated by spark, which will show us the similarities to the BigQuery metadata we just saw.
-#
-# The first step is to create a REST catalog, using the **`biglake`** API.
+# First, let's inspect the REST catalog configuration returned by the `biglake.googleapis.com` Iceberg REST endpoint.
 
 # %%
 import json
@@ -438,25 +429,41 @@ import json
 # access_token = !gcloud auth application-default print-access-token
 access_token = access_token[0]
 
-# catalog_metadata = !curl -H "x-goog-user-project: {PROJECT_ID}" \
+# catalog_metadata = !curl -s -H "x-goog-user-project: {PROJECT_ID}" \
 #   -H "Accept: application/json" \
+#   -H "X-Iceberg-Access-Delegation: vended-credentials" \
 #   -H "Authorization: Bearer {access_token}" \
-#   https://biglake.googleapis.com/iceberg/v1/restcatalog/v1/config?warehouse=gs://{REST_CATALOG_BUCKET_NAME}
+#   "https://biglake.googleapis.com/iceberg/v1/restcatalog/v1/config?warehouse=gs://{REST_CATALOG_BUCKET_NAME}"
 
 catalog_metadata = json.loads("".join(catalog_metadata))
 catalog_metadata
 
 # %% [markdown]
-# Now that we have a rest catalog, we can start up a spark session, with the required configurations
+# Now that we have verified our Lakehouse Runtime Catalog config, let's start a **Serverless for Apache Spark** session (via Spark Connect) with **Credential Vending** and native **OpenLineage** capture enabled.
 
 # %%
+import sys
 from google.cloud.dataproc_spark_connect import DataprocSparkSession
 from google.cloud.dataproc_v1 import Session
 
 session = Session()
 
+# Match the Serverless for Apache Spark runtime Python version to the notebook kernel
+# (Runtime 4.0 = Python 3.13, Runtime 3.0 = Python 3.12, Runtime 2.3 = Python 3.11).
+_py_minor = sys.version_info[:2]
+session.runtime_config.version = (
+    "4.0" if _py_minor >= (3, 13) else "3.0" if _py_minor == (3, 12) else "2.3"
+)
+print(
+    f"Using Serverless Spark runtime {session.runtime_config.version} "
+    f"for Python {_py_minor[0]}.{_py_minor[1]}"
+)
+
 catalog_name = "external_catalog"
 
+# Lakehouse Runtime Catalog (Apache Iceberg REST Catalog) — GA v1 endpoint.
+# Note: If a specific Spark runtime does not emit Iceberg lineage edges against v1,
+# switch the URI below to https://biglake.googleapis.com/iceberg/v1beta/restcatalog.
 session.runtime_config.properties[
     f"spark.sql.catalog.{catalog_name}"
 ] = "org.apache.iceberg.spark.SparkCatalog"
@@ -471,6 +478,12 @@ session.runtime_config.properties[
     f"spark.sql.catalog.{catalog_name}.header.x-goog-user-project"
 ] = PROJECT_ID
 session.runtime_config.properties[
+    f"spark.sql.catalog.{catalog_name}.header.X-Iceberg-Access-Delegation"
+] = "vended-credentials"
+session.runtime_config.properties[
+    f"spark.sql.catalog.{catalog_name}.gcs.oauth2.refresh-credentials-endpoint"
+] = "https://oauth2.googleapis.com/token"
+session.runtime_config.properties[
     f"spark.sql.catalog.{catalog_name}.rest.auth.type"
 ] = "org.apache.iceberg.gcp.auth.GoogleAuthManager"
 session.runtime_config.properties[
@@ -483,6 +496,14 @@ session.runtime_config.properties[
     "spark.sql.extensions"
 ] = "org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions"
 session.runtime_config.properties["spark.sql.defaultCatalog"] = catalog_name
+
+# Native Serverless for Apache Spark OpenLineage -> Knowledge Catalog.
+# Do not manually set spark.extraListeners here; spark.dataproc.lineage.enabled
+# automatically injects the OpenLineage listener and gcplineage transport.
+session.runtime_config.properties["spark.dataproc.lineage.enabled"] = "true"
+session.runtime_config.properties[
+    "spark.openlineage.namespace"
+] = "ridership_lakehouse_demo"
 
 
 # Create the Spark session. This will take some time.
@@ -515,31 +536,34 @@ display_blobs_with_prefix(REST_CATALOG_BUCKET_NAME, REST_CATALOG_PREFIX)
 # %% [markdown]
 # Like before, we can see a similar structure - with some differences
 #
-# - The top folder, `rest-namespace` is just a reference to the namespace we created in Spark
-# - Under the namespace `rest-namespace`, we can see a `bus_lines` folder, referencing our table, and then the familiar structure of a `data` folder, and a `metadata` folder.
-# - The files under the `data` folder, are still `parquet` files
-# - The files under the `metadata` folder looks slightly different, since Spark was the one creating them, and not BQ, but their purpose is the same. we can repeat the process of reading the json file, which will point to the `snap-` avro file, and so on and so on.
+# - The top folder, `rest_namespace`, references the namespace we created in Spark.
+# - Under `rest_namespace`, we see a `bus_lines` folder with the familiar `data` and `metadata` folders.
+# - The files under the `data` folder are still `parquet` files.
+# - The files under the `metadata` folder look slightly different because Spark wrote them instead of BigQuery, but their structure and purpose are identical (`metadata.json` -> `snap-*.avro` -> manifest Avro files).
 #
 # Iceberg is the layer that enables interoperability between processing engines.
 #
-# Now, we just need to "mount" the `bus_lines` Iceberg Data in BigQuery:
+# Now we query `bus_lines` directly from BigQuery using **4-part `P.C.N.T` syntax** (`project.catalog.namespace.table`) and expose a live BigQuery View (`ridership_lakehouse.bus_lines`) — eliminating fragile static `metadata.json` external table pointers.
 
 # %%
-metadata_blob = list(
-    storage_client.list_blobs(
-        REST_CATALOG_BUCKET_NAME,
-        match_glob=f"{REST_CATALOG_PREFIX}/bus_lines/metadata/*.metadata.json",
-    )
-)[0]
-
+# Query the Spark-managed Iceberg table directly via 4-part P.C.N.T syntax.
+# Wrapping the full 4-part identifier in backticks safely handles hyphenated IDs.
 bigquery_client.query(
     f"""
-CREATE OR REPLACE EXTERNAL TABLE `{BQ_DATASET}.bus_lines`
-  WITH CONNECTION `{PROJECT_ID}.{LOCATION}.{BQ_CONNECTION_NAME}`
-  OPTIONS (
-         format = 'ICEBERG',
-         uris = ["gs://{REST_CATALOG_BUCKET_NAME}/{metadata_blob.name}"]
-   )
+SELECT *
+FROM `{PROJECT_ID}.{REST_CATALOG_BUCKET_NAME}.{REST_CATALOG_PREFIX}.bus_lines`
+LIMIT 10
+"""
+).to_dataframe()
+
+# %%
+# Create a live BigQuery View so downstream notebooks and the Cloud Run dashboard
+# always read the latest committed Iceberg snapshot without updating static pointers.
+bigquery_client.query(
+    f"""
+CREATE OR REPLACE VIEW `{PROJECT_ID}.{BQ_DATASET}.bus_lines` AS
+SELECT *
+FROM `{PROJECT_ID}.{REST_CATALOG_BUCKET_NAME}.{REST_CATALOG_PREFIX}.bus_lines`
 """
 ).result()
 
@@ -616,10 +640,51 @@ display_blobs_with_prefix(BQ_CATALOG_BUCKET_NAME, ridership_prefix + "data/")
 display_blobs_with_prefix(BQ_CATALOG_BUCKET_NAME, ridership_prefix + "metadata")
 
 # %% [markdown]
+# ## Verify Automatic Discovery in Knowledge Catalog
+#
+# Both **BigQuery Managed Iceberg Tables** (`bus_stations`, `ridership`) and **Lakehouse Runtime Catalog** assets (`bus_lines`) are automatically registered in **Knowledge Catalog** alongside the Terraform-provisioned Business Glossary (`ridership-lakehouse-glossary`).
+
+# %%
+from google.cloud import dataplex_v1
+
+catalog_client = dataplex_v1.CatalogServiceClient()
+
+discovered_rows = []
+for table_query in ["bus_lines", "bus_stations", "ridership"]:
+    request = dataplex_v1.SearchEntriesRequest(
+        name=f"projects/{PROJECT_ID}/locations/global",
+        scope=f"projects/{PROJECT_ID}",
+        query=table_query,
+        page_size=10,
+    )
+    for result in catalog_client.search_entries(request=request):
+        entry = result.dataplex_entry
+        discovered_rows.append(
+            {
+                "query": table_query,
+                "entry_type": entry.entry_type.split("/")[-1],
+                "fully_qualified_name": entry.fully_qualified_name,
+                "resource": entry.entry_source.resource if entry.entry_source else "",
+                "entry_name": entry.name,
+            }
+        )
+
+print(
+    f"Knowledge Catalog Search: https://console.cloud.google.com/dataplex/search?project={PROJECT_ID}&q=ridership"
+)
+print(
+    f"Business Glossary: https://console.cloud.google.com/dataplex/glossaries/projects/{PROJECT_ID}/locations/{LOCATION}/glossaries/ridership-lakehouse-glossary?project={PROJECT_ID}"
+)
+pd.DataFrame(
+    discovered_rows,
+    columns=["query", "entry_type", "fully_qualified_name", "resource", "entry_name"],
+).drop_duplicates(subset=["entry_name"])
+
+# %% [markdown]
 # # Conclusion
 #
-# In this notebook, we created our tables, loaded data - and observed what happens on GCS when managing Iceberg tables either by BigQuery or by other engines like Spark.
+# In this notebook, we created our tables, loaded data, and observed how Apache Iceberg manages Parquet files and metadata snapshots on Cloud Storage across **BigQuery Managed Iceberg Tables** and the **Lakehouse Runtime Catalog** (with **Credential Vending**).
 #
-# We saw the metadata and examined how Iceberg keeps pointer to the actual data and manages schemas and metadata.
+# We queried `bus_lines` dynamically from BigQuery using 4-part `P.C.N.T` syntax wrapped in a live View, captured OpenLineage metadata from **Serverless for Apache Spark**, and verified automatic asset registration in **Knowledge Catalog**.
 #
-# In the next notebook, we will use Apache Spark to do some data processing, and focus our attention on how to read data from the different catalogs, and the pros and cons for each method of reading the data.
+# In the next notebook, we will use **Serverless for Apache Spark** (with **Lightning Engine**) to simulate bus rides, verify end-to-end **OpenLineage**, and run an automated **Knowledge Catalog Data Quality** scan.

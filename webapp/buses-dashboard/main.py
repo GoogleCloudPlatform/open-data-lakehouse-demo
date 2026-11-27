@@ -206,7 +206,7 @@ def stop_kafka_simulation():
 def index():
     bus_lines = app.config["bq_client"].get_all_bus_lines()
     spark_link = spark_service.pyspark_main_file.replace(
-        "gs://", "https://storage.mtls.cloud.google.com/"
+        "gs://", "https://console.cloud.google.com/storage/browser/_details/"
     )
     return render_template(
         "index.html", bus_lines=bus_lines, pyspark_file_link=spark_link
